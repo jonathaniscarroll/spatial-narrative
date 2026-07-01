@@ -1,0 +1,120 @@
+:: StoryTitle
+Geolocated SugarCube Example
+
+:: StoryInit
+<<set $geo = {
+  watchId: null,
+  current: null,
+  visible: [],
+  unlocked: []
+}>>
+<<set setup.geo = {}>>
+
+:: Story JavaScript [script]
+setup.geo.parse = function (passageText) {
+  const lines = passageText.split(/\n/);
+  const meta = {};
+  const body = [];
+  for (const line of lines) {
+    if (line.startsWith('@geo ')) {
+      const parts = line.replace('@geo ', '').split(',').map(v => Number(v.trim()));
+      meta.lat = parts[0];
+      meta.lng = parts[1];
+      meta.radius = parts[2] || 30;
+    } else if (line.startsWith('@lede ')) {
+      meta.lede = line.replace('@lede ', '').trim();
+    } else {
+      body.push(line);
+    }
+  }
+  return Object.assign({}, meta, { body: body.join('\n').trim() });
+};
+
+setup.geo.distance = function (aLat, aLng, bLat, bLng) {
+  const R = 6371000;
+  const toRad = d => d * Math.PI / 180;
+  const dLat = toRad(bLat - aLat);
+  const dLng = toRad(bLng - aLng);
+  const q = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.atan2(Math.sqrt(q), Math.sqrt(1 - q));
+};
+
+setup.geo.points = function () {
+  return Story.getAllPassages()
+    .filter(p => p.tags.includes('geo'))
+    .map(p => Object.assign({ name: p.title, tags: p.tags }, setup.geo.parse(p.text)));
+};
+
+setup.geo.evaluate = function (lat, lng) {
+  State.variables.geo.current = { lat, lng };
+  const visible = setup.geo.points().filter(p => setup.geo.distance(lat, lng, p.lat, p.lng) <= p.radius);
+  State.variables.geo.visible = visible;
+  visible.forEach(p => {
+    if (!State.variables.geo.unlocked.includes(p.name)) {
+      State.variables.geo.unlocked.push(p.name);
+    }
+  });
+  Engine.show();
+};
+
+setup.geo.start = function () {
+  if (!navigator.geolocation) {
+    alert('Geolocation is unavailable in this browser.');
+    return;
+  }
+  if (State.variables.geo.watchId !== null) {
+    navigator.geolocation.clearWatch(State.variables.geo.watchId);
+  }
+  State.variables.geo.watchId = navigator.geolocation.watchPosition(
+    pos => setup.geo.evaluate(pos.coords.latitude, pos.coords.longitude),
+    err => alert(err.message),
+    { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+  );
+};
+
+:: Start
+You are standing inside a geolocated SugarCube story.
+
+<<button "Start geolocation">><<run setup.geo.start()>><</button>>
+
+Visible passages right now:
+<<if $geo.visible.length>>
+<ul>
+<<for _p range $geo.visible>>
+  <li><<link _p.name>><<goto _p.name>><</link>> — <<print _p.lede>></li>
+<</for>>
+</ul>
+<<else>>
+None yet. Move into a trigger radius.
+<</if>>
+
+Unlocked passages:
+<<if $geo.unlocked.length>>
+<<for _name range $geo.unlocked>><<print _name>><br><</for>>
+<<else>>
+No unlocks recorded.
+<</if>>
+
+:: FerryTerminal [geo harbour]
+@geo 44.6488,-63.5752,45
+@lede Low metal hum from the harbour.
+
+You arrive at the edge condition between ticketing, weather, and departure.
+
+[[Back to Start->Start]]
+
+:: ClockTower [geo signal history]
+@geo 44.6476,-63.5728,35
+@lede A vertical metronome.
+
+The city keeps time through stone, repetition, and vantage.
+
+[[Back to Start->Start]]
+
+:: Waterline [geo threshold]
+@geo 44.6464,-63.5699,30
+@lede Exposure to wind and open distance.
+
+At the waterline the narrative becomes weather-first.
+
+[[Back to Start->Start]]
