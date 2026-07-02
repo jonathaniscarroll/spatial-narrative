@@ -31,12 +31,6 @@ jobs:
           test -f vendor/storyformats/sugarcube-2/format.js
           chmod +x vendor/tweego/tweego
 
-      - name: List available Tweego formats
-        env:
-          TWEEGO_PATH: vendor/storyformats
-        run: |
-          vendor/tweego/tweego --list-formats
-
       - name: Build story
         env:
           TWEEGO_PATH: vendor/storyformats
@@ -47,6 +41,7 @@ jobs:
       - name: Verify output
         run: |
           test -f build/index.html
+          ls -la build
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
