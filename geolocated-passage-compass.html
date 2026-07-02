@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Geolocated Passage Compass</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&display=swap" rel="stylesheet">
+  <style>
+    :root, [data-theme="light"] {
+      --text-sm: clamp(0.875rem, 0.8rem + 0.35vw, 1rem);
+      --text-base: clamp(1rem, 0.95rem + 0.25vw, 1.125rem);
+      --text-lg: clamp(1.125rem, 1rem + 0.75vw, 1.5rem);
+      --text-xl: clamp(1.5rem, 1.2rem + 1.25vw, 2.25rem);
+      --space-2: 0.5rem; --space-3: 0.75rem; --space-4: 1rem; --space-6: 1.5rem; --space-8: 2rem;
+      --color-bg: #f7f6f2; --color-surface: #f9f8f5; --color-surface-2: #fbfbf9; --color-border: #d4d1ca;
+      --color-text: #28251d; --color-text-muted: #66635d; --color-primary: #01696f; --color-accent: #d8892a; --color-danger: #bf5b5b;
+      --radius-lg: 0.75rem; --radius-xl: 1rem; --shadow: 0 12px 32px rgba(20,20,18,.08);
+      --font-body: 'IBM Plex Sans', sans-serif; --font-display: 'IBM Plex Serif', serif;
+    }
+    [data-theme="dark"] {
+      --color-bg: #171614; --color-surface: #1c1b19; --color-surface-2: #201f1d; --color-border: #393836;
+      --color-text: #ece8df; --color-text-muted: #a4a095; --color-primary: #4f98a3; --color-accent: #efb14e; --color-danger: #f08a8a;
+      --shadow: 0 16px 40px rgba(0,0,0,.28);
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100dvh; display: grid; place-items: center; background: radial-gradient(circle at top, color-mix(in oklab, var(--color-primary) 14%, transparent), transparent 30%), var(--color-bg); color: var(--color-text); font: 400 var(--text-base)/1.6 var(--font-body); }
+    button { font: inherit; }
+    .shell { width: min(100%, 760px); padding: var(--space-4); }
+    .card { background: color-mix(in oklab, var(--color-surface) 92%, transparent); border: 1px solid color-mix(in oklab, var(--color-text) 12%, transparent); border-radius: var(--radius-xl); box-shadow: var(--shadow); overflow: hidden; }
+    .topbar { display: flex; justify-content: space-between; gap: var(--space-3); padding: var(--space-4); border-bottom: 1px solid color-mix(in oklab, var(--color-text) 10%, transparent); background: color-mix(in oklab, var(--color-surface-2) 90%, transparent); }
+    .actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+    .btn { min-height: 44px; border-radius: 999px; border: 1px solid color-mix(in oklab, var(--color-text) 10%, transparent); padding: .75rem 1rem; background: var(--color-surface); color: var(--color-text); cursor: pointer; }
+    .btn.primary { background: var(--color-primary); color: white; border-color: transparent; }
+    .btn:hover { filter: brightness(1.04); }
+    .content { padding: var(--space-6); display: grid; gap: var(--space-6); }
+    .passage h1 { margin: 0 0 .35rem; font: 600 var(--text-xl)/1.12 var(--font-display); }
+    .lede { margin: 0 0 var(--space-4); color: var(--color-text-muted); }
+    .body { font-size: var(--text-lg); max-width: 38ch; }
+    .meta { display: flex; gap: var(--space-3); flex-wrap: wrap; color: var(--color-text-muted); font-size: var(--text-sm); }
+    .compass-section { display: grid; gap: var(--space-4); }
+    .compass-wrap { display: grid; grid-template-columns: 240px 1fr; gap: var(--space-6); align-items: center; }
+    .compass { position: relative; width: 240px; height: 240px; border-radius: 999px; border: 1px solid color-mix(in oklab, var(--color-text) 12%, transparent); background: radial-gradient(circle at center, color-mix(in oklab, var(--color-primary) 10%, transparent), transparent 46%), var(--color-surface-2); margin: 0 auto; }
+    .compass::before, .compass::after { content: ""; position: absolute; inset: 12px; border-radius: 999px; border: 1px dashed color-mix(in oklab, var(--color-text) 10%, transparent); }
+    .north { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); font-size: var(--text-sm); color: var(--color-accent); }
+    .heading-arrow { position: absolute; left: 50%; top: 50%; width: 4px; height: 92px; background: linear-gradient(to top, transparent, var(--color-danger)); transform-origin: 50% 100%; border-radius: 999px; translate: -50% -100%; }
+    .heading-arrow::after { content: ""; position: absolute; top: -10px; left: 50%; width: 18px; height: 18px; background: var(--color-danger); clip-path: polygon(50% 0%, 0% 100%, 100% 100%); transform: translateX(-50%); }
+    .center-dot { position: absolute; left: 50%; top: 50%; width: 14px; height: 14px; border-radius: 999px; background: var(--color-text); transform: translate(-50%, -50%); }
+    .marker { position: absolute; left: 50%; top: 50%; width: 0; height: 0; transform-origin: 0 0; }
+    .marker .line { position: absolute; left: 0; top: 0; width: 2px; height: 76px; background: color-mix(in oklab, var(--color-primary) 70%, white); transform: translate(-50%, -100%); opacity: .85; }
+    .marker .dot { position: absolute; left: 0; top: -84px; width: 12px; height: 12px; border-radius: 999px; background: var(--color-primary); transform: translate(-50%, -50%); box-shadow: 0 0 0 6px color-mix(in oklab, var(--color-primary) 20%, transparent); }
+    .marker.active .dot { background: var(--color-accent); }
+    .targets { display: grid; gap: var(--space-3); }
+    .target { padding: var(--space-4); border-radius: var(--radius-lg); background: var(--color-surface-2); border: 1px solid color-mix(in oklab, var(--color-text) 8%, transparent); }
+    .target strong { display: block; margin-bottom: .2rem; }
+    .status { padding: var(--space-4); border-top: 1px solid color-mix(in oklab, var(--color-text) 10%, transparent); background: color-mix(in oklab, var(--color-surface-2) 90%, transparent); color: var(--color-text-muted); font-size: var(--text-sm); }
+    @media (max-width: 720px) {
+      .content { padding: var(--space-4); }
+      .compass-wrap { grid-template-columns: 1fr; }
+      .body { font-size: var(--text-base); }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="card">
+      <header class="topbar">
+        <div>
+          <div style="font-size:var(--text-sm); color:var(--color-text-muted);">Geolocated story view</div>
+          <div id="modeLabel">Idle</div>
+        </div>
+        <div class="actions">
+          <button class="btn" id="themeBtn">Theme</button>
+          <button class="btn" id="orientBtn">Enable compass</button>
+          <button class="btn primary" id="gpsBtn">Start geolocation</button>
+          <button class="btn" id="simBtn">Simulate</button>
+        </div>
+      </header>
+
+      <div class="content">
+        <article class="passage">
+          <h1 id="passageTitle">Waiting for a place</h1>
+          <p class="lede" id="passageLede">Move into a trigger radius to show a passage.</p>
+          <div class="body" id="passageBody">This page only shows the currently active passage, plus a live compass pointing toward the other authored locations.</div>
+          <div class="meta">
+            <span id="coordLabel">No coordinates yet</span>
+            <span id="headingLabel">Heading unavailable</span>
+          </div>
+        </article>
+
+        <section class="compass-section">
+          <div>
+            <h2 style="margin:0 0 .25rem; font-size:var(--text-lg);">Compass to other passages</h2>
+            <div style="color:var(--color-text-muted); font-size:var(--text-sm);">Relative bearings update from device heading when available; otherwise the compass falls back to north-up mode.</div>
+          </div>
+          <div class="compass-wrap">
+            <div class="compass" id="compass">
+              <div class="north">N</div>
+              <div class="heading-arrow" id="headingArrow"></div>
+              <div class="center-dot"></div>
+            </div>
+            <div class="targets" id="targets"></div>
+          </div>
+        </section>
+      </div>
+
+      <footer class="status" id="statusText">Geolocation and orientation both require secure context permissions.</footer>
+    </section>
+  </main>
+
+  <script>
+    const story = {
+      passages: [
+        { name: 'FerryTerminal', tags: ['geo', 'harbour'], lede: 'Low metal hum from the harbour.', body: 'You arrive at the edge condition between ticketing, weather, and departure.', lat: 44.6488, lng: -63.5752, radius: 45 },
+        { name: 'ClockTower', tags: ['geo', 'signal', 'history'], lede: 'A vertical metronome.', body: 'The city keeps time through stone, repetition, and vantage.', lat: 44.6476, lng: -63.5728, radius: 35 },
+        { name: 'Waterline', tags: ['geo', 'threshold'], lede: 'Exposure to wind and open distance.', body: 'At the waterline the narrative becomes weather-first.', lat: 44.6464, lng: -63.5699, radius: 30 }
+      ]
+    };
+
+    const state = {
+      watchId: null,
+      current: null,
+      heading: null,
+      active: null,
+      mode: 'Idle',
+      orientationOn: false
+    };
+
+    const $ = sel => document.querySelector(sel);
+
+    function setMode(mode) {
+      state.mode = mode;
+      $('#modeLabel').textContent = mode;
+    }
+
+    function haversineMeters(aLat, aLng, bLat, bLng) {
+      const R = 6371000;
+      const toRad = deg => deg * Math.PI / 180;
+      const dLat = toRad(bLat - aLat);
+      const dLng = toRad(bLng - aLng);
+      const q = Math.sin(dLat/2) ** 2 + Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * Math.sin(dLng/2) ** 2;
+      return 2 * R * Math.atan2(Math.sqrt(q), Math.sqrt(1 - q));
+    }
+
+    function bearingDegrees(aLat, aLng, bLat, bLng) {
+      const toRad = deg => deg * Math.PI / 180;
+      const toDeg = rad => rad * 180 / Math.PI;
+      const φ1 = toRad(aLat), φ2 = toRad(bLat), λ1 = toRad(aLng), λ2 = toRad(bLng);
+      const y = Math.sin(λ2 - λ1) * Math.cos(φ2);
+      const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(λ2 - λ1);
+      return (toDeg(Math.atan2(y, x)) + 360) % 360;
+    }
+
+    function normalize(deg) {
+      return (deg % 360 + 360) % 360;
+    }
+
+    function getHeadingFromEvent(event) {
+      if (typeof event.webkitCompassHeading === 'number') return event.webkitCompassHeading;
+      if (typeof event.alpha === 'number') return normalize(360 - event.alpha);
+      return null;
+    }
+
+    function chooseActivePassage() {
+      if (!state.current) return null;
+      const ranked = story.passages.map(p => ({ ...p, distance: haversineMeters(state.current.lat, state.current.lng, p.lat, p.lng) }))
+        .sort((a, b) => a.distance - b.distance);
+      const inside = ranked.filter(p => p.distance <= p.radius);
+      return inside[0] || ranked[0] || null;
+    }
+
+    function renderPassage() {
+      const p = state.active;
+      if (!p) return;
+      $('#passageTitle').textContent = p.name;
+      $('#passageLede').textContent = p.lede;
+      $('#passageBody').textContent = p.body;
+    }
+
+    function renderTargets() {
+      const targets = $('#targets');
+      targets.innerHTML = '';
+      const compass = $('#compass');
+      [...compass.querySelectorAll('.marker')].forEach(n => n.remove());
+      if (!state.current || !state.active) return;
+
+      story.passages
+        .filter(p => p.name !== state.active.name)
+        .map(p => {
+          const distance = haversineMeters(state.current.lat, state.current.lng, p.lat, p.lng);
+          const bearing = bearingDegrees(state.current.lat, state.current.lng, p.lat, p.lng);
+          const relative = state.heading == null ? bearing : normalize(bearing - state.heading);
+          return { ...p, distance, bearing, relative };
+        })
+        .sort((a, b) => a.distance - b.distance)
+        .forEach((p, i) => {
+          const card = document.createElement('div');
+          card.className = 'target';
+          card.innerHTML = `<strong>${p.name}</strong><div>${Math.round(p.distance)} m away</div><div style="color:var(--color-text-muted); margin-top:.2rem;">Bearing ${Math.round(p.bearing)}° · Relative ${Math.round(p.relative)}°</div>`;
+          targets.appendChild(card);
+
+          const marker = document.createElement('div');
+          marker.className = 'marker' + (i === 0 ? ' active' : '');
+          marker.style.transform = `translate(-50%, -50%) rotate(${p.relative}deg)`;
+          marker.innerHTML = '<div class="line"></div><div class="dot"></div>';
+          compass.appendChild(marker);
+        });
+    }
+
+    function renderHeading() {
+      $('#headingLabel').textContent = state.heading == null ? 'Heading unavailable' : `Heading ${Math.round(state.heading)}°`;
+      $('#headingArrow').style.transform = `translate(-50%, -100%) rotate(${state.heading == null ? 0 : state.heading}deg)`;
+    }
+
+    function renderPosition() {
+      $('#coordLabel').textContent = !state.current ? 'No coordinates yet' : `${state.current.lat.toFixed(5)}, ${state.current.lng.toFixed(5)}`;
+    }
+
+    function refresh() {
+      state.active = chooseActivePassage();
+      renderPassage();
+      renderHeading();
+      renderPosition();
+      renderTargets();
+      $('#statusText').textContent = state.active
+        ? `Active passage: ${state.active.name}. Compass points to the remaining passages.`
+        : 'Waiting for a valid location.';
+    }
+
+    function startGeolocation() {
+      if (!navigator.geolocation) {
+        setMode('Geolocation unsupported');
+        $('#statusText').textContent = 'This browser does not expose navigator.geolocation.';
+        return;
+      }
+      setMode('GPS live');
+      if (state.watchId !== null) navigator.geolocation.clearWatch(state.watchId);
+      state.watchId = navigator.geolocation.watchPosition(
+        pos => {
+          state.current = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          refresh();
+        },
+        err => {
+          setMode('GPS error');
+          $('#statusText').textContent = err.message;
+        },
+        { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+      );
+    }
+
+    async function enableOrientation() {
+      try {
+        if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+          const result = await DeviceOrientationEvent.requestPermission();
+          if (result !== 'granted') {
+            $('#statusText').textContent = 'Orientation permission was denied.';
+            return;
+          }
+        }
+        window.addEventListener('deviceorientation', handleOrientation, true);
+        state.orientationOn = true;
+        $('#statusText').textContent = 'Compass heading enabled.';
+      } catch (err) {
+        $('#statusText').textContent = err.message || 'Could not enable orientation.';
+      }
+    }
+
+    function handleOrientation(event) {
+      const heading = getHeadingFromEvent(event);
+      if (heading == null) return;
+      state.heading = heading;
+      refresh();
+    }
+
+    function simulate() {
+      setMode('Simulated walk');
+      const path = [
+        { lat: 44.6492, lng: -63.5760, heading: 122 },
+        { lat: 44.6488, lng: -63.5752, heading: 115 },
+        { lat: 44.6478, lng: -63.5735, heading: 108 },
+        { lat: 44.6476, lng: -63.5728, heading: 180 },
+        { lat: 44.6467, lng: -63.5708, heading: 128 },
+        { lat: 44.6464, lng: -63.5699, heading: 96 }
+      ];
+      let i = 0;
+      state.current = { lat: path[0].lat, lng: path[0].lng };
+      state.heading = path[0].heading;
+      refresh();
+      const timer = setInterval(() => {
+        i += 1;
+        if (i >= path.length) {
+          clearInterval(timer);
+          return;
+        }
+        state.current = { lat: path[i].lat, lng: path[i].lng };
+        state.heading = path[i].heading;
+        refresh();
+      }, 1600);
+    }
+
+    $('#gpsBtn').addEventListener('click', startGeolocation);
+    $('#orientBtn').addEventListener('click', enableOrientation);
+    $('#simBtn').addEventListener('click', simulate);
+    $('#themeBtn').addEventListener('click', () => {
+      const root = document.documentElement;
+      root.setAttribute('data-theme', root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+    });
+
+    refresh();
+  </script>
+</body>
+</html>
