@@ -3,11 +3,12 @@ Geolocated SugarCube Example
 
 :: StoryData
 {
-  "ifid": "D3E8B7B1-6B47-4A4C-9E65-GEOLOCATEDTWEE1",
+  "ifid": "D3E8B7B1-6B47-4A4C-9E65-4B4D2C7A9F10",
   "format": "SugarCube",
   "format-version": "2.36.1",
   "start": "Start"
 }
+
 
 :: StoryInit
 <<set $geo to {
