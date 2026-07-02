@@ -19,6 +19,7 @@ Geolocated SugarCube Example
   error: ""
 }>>
 
+
 :: Story JavaScript [script]
 window.setup = window.setup || {};
 setup.geo = setup.geo || {};
@@ -59,6 +60,7 @@ setup.geo.distance = function (aLat, aLng, bLat, bLng) {
   const toRad = d => d * Math.PI / 180;
   const dLat = toRad(bLat - aLat);
   const dLng = toRad(bLng - aLng);
+
   const q =
     Math.sin(dLat / 2) ** 2 +
     Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) *
@@ -84,14 +86,55 @@ setup.geo.points = function () {
     .filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lng));
 };
 
+setup.geo.getLinkedTargets = function (passageName) {
+  if (!Story.has(passageName)) {
+    return [];
+  }
+
+  const text = Story.get(passageName).text;
+  const targets = new Set();
+  const re = /\\[\\[([^\\]]+)\]\]/g;
+  let m;
+
+  while ((m = re.exec(text)) !== null) {
+    const raw = m[1].trim();
+
+    if (raw.includes("->")) {
+      const parts = raw.split("->");
+      targets.add(parts[1].trim());
+    }
+    else if (raw.includes("<-")) {
+      const parts = raw.split("<-");
+      targets.add(parts[0].trim());
+    }
+    else if (raw.includes("|")) {
+      const parts = raw.split("|");
+      targets.add(parts[1].trim());
+    }
+    else {
+      targets.add(raw);
+    }
+  }
+
+  return [...targets];
+};
+
+setup.geo.currentLinks = function () {
+  return setup.geo.getLinkedTargets(passage());
+};
+
 setup.geo.evaluate = function (lat, lng) {
   const v = State.variables;
 
   v.geo.current = { lat: lat, lng: lng };
   v.geo.error = "";
 
+  const linked = setup.geo.currentLinks();
+
   const visible = setup.geo.points().filter(p => {
-    return setup.geo.distance(lat, lng, p.lat, p.lng) <= p.radius;
+    const inRange = setup.geo.distance(lat, lng, p.lat, p.lng) <= p.radius;
+    const linkedHere = linked.includes(p.name);
+    return inRange && linkedHere;
   });
 
   v.geo.visible = visible;
@@ -148,11 +191,20 @@ setup.geo.formatCoords = function () {
   if (!current) {
     return "No coordinates yet.";
   }
+
   return current.lat.toFixed(6) + ", " + current.lng.toFixed(6);
 };
 
+
 :: Start
 You are standing inside a geolocated SugarCube story.
+
+[[FerryTerminal]]
+[[ClockTower]]
+[[Waterline]]
+[[citadel1]]
+[[Resolutes Club]]
+[[Irving]]
 
 <<button "Start geolocation">>
   <<run setup.geo.start()>>
@@ -168,7 +220,7 @@ You are standing inside a geolocated SugarCube story.
   <p><strong>Error:</strong> <<= $geo.error>></p>
 <</if>>
 
-<p><strong>Visible passages right now:</strong></p>
+<p><strong>Compass targets:</strong></p>
 
 <<if $geo.visible.length gt 0>>
   <ul>
@@ -177,12 +229,12 @@ You are standing inside a geolocated SugarCube story.
       <<link _p.name>>
         <<goto _p.name>>
       <</link>>
-      <<if _p.lede>> — <<= _p.lede>><</if>>
+      <<if _p.lede>> -- <<= _p.lede>><</if>>
     </li>
   <</for>>
   </ul>
 <<else>>
-  <p>None yet. Move into a trigger radius.</p>
+  <p>No linked locations are currently in range.</p>
 <</if>>
 
 <p><strong>Unlocked passages:</strong></p>
@@ -197,6 +249,7 @@ You are standing inside a geolocated SugarCube story.
   <p>No unlocks recorded.</p>
 <</if>>
 
+
 :: FerryTerminal [geo harbour]
 @geo 44.6488,-63.5752,45
 @lede Low metal hum from the harbour.
@@ -204,6 +257,7 @@ You are standing inside a geolocated SugarCube story.
 You arrive at the edge condition between ticketing, weather, and departure.
 
 [[Back to Start->Start]]
+[[ClockTower]]
 
 :: ClockTower [geo signal history]
 @geo 44.6476,-63.5728,35
@@ -212,6 +266,7 @@ You arrive at the edge condition between ticketing, weather, and departure.
 The city keeps time through stone, repetition, and vantage.
 
 [[Back to Start->Start]]
+[[Waterline]]
 
 :: Waterline [geo threshold]
 @geo 44.6464,-63.5699,30
