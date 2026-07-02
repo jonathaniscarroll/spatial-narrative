@@ -1,33 +1,56 @@
 :: StoryTitle
 Geolocated SugarCube Example
 
+:: StoryData
+{
+  "ifid": "D3E8B7B1-6B47-4A4C-9E65-GEOLOCATEDTWEE1",
+  "format": "SugarCube",
+  "format-version": "2.36.1",
+  "start": "Start"
+}
+
 :: StoryInit
-<<set $geo = {
+<<set $geo to {
   watchId: null,
   current: null,
   visible: [],
-  unlocked: []
+  unlocked: [],
+  error: ""
 }>>
-<<set setup.geo = {}>>
 
 :: Story JavaScript [script]
+window.setup = window.setup || {};
+setup.geo = setup.geo || {};
+
 setup.geo.parse = function (passageText) {
   const lines = passageText.split(/\n/);
-  const meta = {};
+  const meta = {
+    lat: null,
+    lng: null,
+    radius: 30,
+    lede: ""
+  };
   const body = [];
-  for (const line of lines) {
-    if (line.startsWith('@geo ')) {
-      const parts = line.replace('@geo ', '').split(',').map(v => Number(v.trim()));
+
+  lines.forEach(line => {
+    const trimmed = line.trim();
+
+    if (trimmed.startsWith("@geo ")) {
+      const parts = trimmed.slice(5).split(",").map(v => Number(v.trim()));
       meta.lat = parts[0];
       meta.lng = parts[1];
-      meta.radius = parts[2] || 30;
-    } else if (line.startsWith('@lede ')) {
-      meta.lede = line.replace('@lede ', '').trim();
-    } else {
+      meta.radius = Number.isFinite(parts[2]) ? parts[2] : 30;
+    }
+    else if (trimmed.startsWith("@lede ")) {
+      meta.lede = trimmed.slice(6).trim();
+    }
+    else {
       body.push(line);
     }
-  }
-  return Object.assign({}, meta, { body: body.join('\n').trim() });
+  });
+
+  meta.body = body.join("\n").trim();
+  return meta;
 };
 
 setup.geo.distance = function (aLat, aLng, bLat, bLng) {
@@ -35,64 +58,142 @@ setup.geo.distance = function (aLat, aLng, bLat, bLng) {
   const toRad = d => d * Math.PI / 180;
   const dLat = toRad(bLat - aLat);
   const dLng = toRad(bLng - aLng);
-  const q = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * Math.sin(dLng / 2) ** 2;
+  const q =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) *
+    Math.sin(dLng / 2) ** 2;
+
   return 2 * R * Math.atan2(Math.sqrt(q), Math.sqrt(1 - q));
 };
 
 setup.geo.points = function () {
-  return Story.getAllPassages()
-    .filter(p => p.tags.includes('geo'))
-    .map(p => Object.assign({ name: p.title, tags: p.tags }, setup.geo.parse(p.text)));
+  return Story.lookup("tags", "geo")
+    .map(p => {
+      const parsed = setup.geo.parse(p.text);
+      return {
+        name: p.title,
+        tags: p.tags,
+        lat: parsed.lat,
+        lng: parsed.lng,
+        radius: parsed.radius,
+        lede: parsed.lede,
+        body: parsed.body
+      };
+    })
+    .filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lng));
 };
 
 setup.geo.evaluate = function (lat, lng) {
-  State.variables.geo.current = { lat, lng };
-  const visible = setup.geo.points().filter(p => setup.geo.distance(lat, lng, p.lat, p.lng) <= p.radius);
-  State.variables.geo.visible = visible;
+  const v = State.variables;
+
+  v.geo.current = { lat: lat, lng: lng };
+  v.geo.error = "";
+
+  const visible = setup.geo.points().filter(p => {
+    return setup.geo.distance(lat, lng, p.lat, p.lng) <= p.radius;
+  });
+
+  v.geo.visible = visible;
+
   visible.forEach(p => {
-    if (!State.variables.geo.unlocked.includes(p.name)) {
-      State.variables.geo.unlocked.push(p.name);
+    if (!v.geo.unlocked.includes(p.name)) {
+      v.geo.unlocked.push(p.name);
     }
   });
+
   Engine.show();
 };
 
 setup.geo.start = function () {
+  const v = State.variables;
+
   if (!navigator.geolocation) {
-    alert('Geolocation is unavailable in this browser.');
+    v.geo.error = "Geolocation is unavailable in this browser.";
+    Engine.show();
     return;
   }
-  if (State.variables.geo.watchId !== null) {
-    navigator.geolocation.clearWatch(State.variables.geo.watchId);
+
+  if (v.geo.watchId !== null) {
+    navigator.geolocation.clearWatch(v.geo.watchId);
   }
-  State.variables.geo.watchId = navigator.geolocation.watchPosition(
-    pos => setup.geo.evaluate(pos.coords.latitude, pos.coords.longitude),
-    err => alert(err.message),
-    { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+
+  v.geo.watchId = navigator.geolocation.watchPosition(
+    pos => {
+      setup.geo.evaluate(pos.coords.latitude, pos.coords.longitude);
+    },
+    err => {
+      v.geo.error = err.message || "Geolocation error.";
+      Engine.show();
+    },
+    {
+      enableHighAccuracy: true,
+      maximumAge: 5000,
+      timeout: 10000
+    }
   );
+};
+
+setup.geo.stop = function () {
+  const v = State.variables;
+
+  if (v.geo.watchId !== null) {
+    navigator.geolocation.clearWatch(v.geo.watchId);
+    v.geo.watchId = null;
+  }
+};
+
+setup.geo.formatCoords = function () {
+  const current = State.variables.geo.current;
+  if (!current) {
+    return "No coordinates yet.";
+  }
+  return current.lat.toFixed(6) + ", " + current.lng.toFixed(6);
 };
 
 :: Start
 You are standing inside a geolocated SugarCube story.
 
-<<button "Start geolocation">><<run setup.geo.start()>><</button>>
+<<button "Start geolocation">>
+  <<run setup.geo.start()>>
+<</button>>
 
-Visible passages right now:
-<<if $geo.visible.length>>
-<ul>
-<<for _p range $geo.visible>>
-  <li><<link _p.name>><<goto _p.name>><</link>> — <<print _p.lede>></li>
-<</for>>
-</ul>
-<<else>>
-None yet. Move into a trigger radius.
+<<button "Stop geolocation">>
+  <<run setup.geo.stop()>>
+<</button>>
+
+<p><strong>Current coordinates:</strong> <<= setup.geo.formatCoords()>></p>
+
+<<if $geo.error>>
+  <p><strong>Error:</strong> <<= $geo.error>></p>
 <</if>>
 
-Unlocked passages:
-<<if $geo.unlocked.length>>
-<<for _name range $geo.unlocked>><<print _name>><br><</for>>
+<p><strong>Visible passages right now:</strong></p>
+
+<<if $geo.visible.length gt 0>>
+  <ul>
+  <<for _p range $geo.visible>>
+    <li>
+      <<link _p.name>>
+        <<goto _p.name>>
+      <</link>>
+      <<if _p.lede>> — <<= _p.lede>><</if>>
+    </li>
+  <</for>>
+  </ul>
 <<else>>
-No unlocks recorded.
+  <p>None yet. Move into a trigger radius.</p>
+<</if>>
+
+<p><strong>Unlocked passages:</strong></p>
+
+<<if $geo.unlocked.length gt 0>>
+  <ul>
+  <<for _name range $geo.unlocked>>
+    <li><<= _name>></li>
+  <</for>>
+  </ul>
+<<else>>
+  <p>No unlocks recorded.</p>
 <</if>>
 
 :: FerryTerminal [geo harbour]
@@ -119,16 +220,18 @@ At the waterline the narrative becomes weather-first.
 
 [[Back to Start->Start]]
 
-:: resolutes club
+:: Resolutes Club [geo]
 @geo 44.635722,-63.572139,5
+@lede A narrow service edge behind the club.
 
-the alleyway behind the resolutes club is dark and foggy - like some sott of dark and foggy alleyway
+The alleyway behind the Resolutes Club is dark and foggy, like some sort of archetypal noir side channel.
 
+[[Back to Start->Start]]
 
-:: irving
+:: Irving [geo]
 @geo 44.635278,-63.571000,30
+@lede Refuse, fuel, and back-lot texture.
 
- behind irvinf is a garbage can full of trash
+Behind Irving is a garbage can full of trash.
 
-
-
+[[Back to Start->Start]]
