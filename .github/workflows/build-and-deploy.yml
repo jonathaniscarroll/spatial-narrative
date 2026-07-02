@@ -1,1 +1,56 @@
+name: Build and Deploy Twine
 
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download Tweego
+        run: |
+          curl -L -o tweego.zip https://www.motoslave.net/tweego/download.php?file=tweego-2.1.1-linux-x64.zip
+          unzip -q tweego.zip -d tweego-bin
+          chmod +x tweego-bin/tweego
+
+      - name: Download SugarCube format
+        run: |
+          mkdir -p storyformats/sugarcube-2
+          curl -L https://www.motoslave.net/sugarcube/2/format.js -o storyformats/sugarcube-2/format.js
+
+      - name: Build story
+        env:
+          TWEEGO_PATH: storyformats
+        run: |
+          mkdir -p build
+          tweego-bin/tweego -o build/index.html story
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: build
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
