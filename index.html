@@ -1,1 +1,440 @@
-test
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Geo Passage Navigator Core</title>
+  <style>
+    body {
+      margin: 0;
+      background: #c0c0c0;
+      color: #000000;
+      font-family: "Times New Roman", Times, serif;
+      font-size: 16px;
+    }
+    a { color: #0000cc; }
+    .window {
+      max-width: 900px;
+      margin: 18px auto;
+      border: 2px solid #000;
+      background: #d4d0c8;
+      box-shadow: 3px 3px 0 #7f7f7f;
+    }
+    .titlebar {
+      background: linear-gradient(90deg, #000080, #1084d0);
+      color: #fff;
+      padding: 6px 8px;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 14px;
+      font-weight: bold;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .titlebar .buttons {
+      display: flex;
+      gap: 4px;
+    }
+    .titlebar .box {
+      width: 14px;
+      height: 14px;
+      background: #d4d0c8;
+      border-top: 2px solid #fff;
+      border-left: 2px solid #fff;
+      border-right: 2px solid #404040;
+      border-bottom: 2px solid #404040;
+    }
+    .menubar, .toolbar, .statusbar {
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 13px;
+      background: #d4d0c8;
+      border-top: 1px solid #ffffff;
+      border-bottom: 1px solid #808080;
+      padding: 5px 8px;
+    }
+    .toolbar button {
+      margin: 2px 3px 2px 0;
+    }
+    .layout {
+      padding: 12px;
+    }
+    table.core {
+      width: 100%;
+      border-collapse: collapse;
+      background: #ffffff;
+      border: 2px inset #c0c0c0;
+    }
+    table.core td {
+      vertical-align: top;
+      border: 1px solid #808080;
+      padding: 10px;
+    }
+    .passage-title {
+      font-size: 32px;
+      font-weight: bold;
+      margin: 0 0 10px 0;
+      color: #000080;
+    }
+    .lede {
+      margin: 0 0 10px 0;
+      color: #333333;
+      font-style: italic;
+    }
+    .bodycopy {
+      font-size: 20px;
+      line-height: 1.45;
+      margin-bottom: 16px;
+    }
+    .meta {
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 12px;
+      background: #ffffe1;
+      border: 1px solid #808080;
+      padding: 6px;
+      margin-bottom: 12px;
+    }
+    .panel-title {
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 13px;
+      font-weight: bold;
+      margin-bottom: 8px;
+      background: #000080;
+      color: #ffffff;
+      padding: 4px 6px;
+    }
+    .compass-box {
+      background: #f0f0f0;
+      border: 2px groove #c0c0c0;
+      padding: 10px;
+      text-align: center;
+    }
+    .compass {
+      position: relative;
+      width: 220px;
+      height: 220px;
+      margin: 0 auto 10px auto;
+      border: 2px solid #000;
+      border-radius: 50%;
+      background: #ffffff;
+    }
+    .compass .ring {
+      position: absolute;
+      inset: 18px;
+      border: 1px dashed #808080;
+      border-radius: 50%;
+    }
+    .north {
+      position: absolute;
+      top: 6px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 13px;
+      font-weight: bold;
+      color: #cc0000;
+    }
+    .center-dot {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 12px;
+      height: 12px;
+      margin-left: -6px;
+      margin-top: -6px;
+      background: #000;
+      border-radius: 50%;
+    }
+    .heading-arrow {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 4px;
+      height: 82px;
+      margin-left: -2px;
+      margin-top: -82px;
+      background: #cc0000;
+      transform-origin: 50% 82px;
+    }
+    .heading-arrow:before {
+      content: "";
+      position: absolute;
+      left: -7px;
+      top: -12px;
+      width: 0;
+      height: 0;
+      border-left: 9px solid transparent;
+      border-right: 9px solid transparent;
+      border-bottom: 14px solid #cc0000;
+    }
+    .marker {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 0;
+      height: 0;
+      transform-origin: 0 0;
+    }
+    .marker .line {
+      position: absolute;
+      left: -1px;
+      top: -72px;
+      width: 2px;
+      height: 62px;
+      background: #000080;
+    }
+    .marker .dot {
+      position: absolute;
+      left: -6px;
+      top: -82px;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #000080;
+      border: 1px solid #000;
+    }
+    .marker.active .dot { background: #ff9900; }
+    .target-list {
+      margin: 0;
+      padding-left: 20px;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 13px;
+    }
+    .target-list li { margin-bottom: 8px; }
+    .button95 {
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 13px;
+      background: #d4d0c8;
+      color: #000;
+      border-top: 2px solid #ffffff;
+      border-left: 2px solid #ffffff;
+      border-right: 2px solid #404040;
+      border-bottom: 2px solid #404040;
+      padding: 4px 10px;
+      min-height: 30px;
+      cursor: pointer;
+    }
+    .button95:active {
+      border-top: 2px solid #404040;
+      border-left: 2px solid #404040;
+      border-right: 2px solid #ffffff;
+      border-bottom: 2px solid #ffffff;
+    }
+    .marquee-box {
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 12px;
+      background: #ffffe1;
+      border: 1px solid #808080;
+      padding: 4px;
+      margin-bottom: 10px;
+    }
+    .statusbar {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    @media (max-width: 760px) {
+      table.core, table.core tbody, table.core tr, table.core td { display: block; width: 100%; }
+      .passage-title { font-size: 26px; }
+      .bodycopy { font-size: 18px; }
+      .compass { width: 200px; height: 200px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="window">
+    <div class="titlebar">
+      <div>Geo Passage Navigator Core - Netscape Style</div>
+      <div class="buttons"><div class="box"></div><div class="box"></div><div class="box"></div></div>
+    </div>
+    <div class="menubar">File &nbsp; Edit &nbsp; View &nbsp; Go &nbsp; Bookmarks &nbsp; Options &nbsp; Directory &nbsp; Help</div>
+    <div class="toolbar">
+      <button class="button95" id="gpsBtn">Start Geolocation</button>
+      <button class="button95" id="orientBtn">Enable Compass</button>
+      <button class="button95" id="simBtn">Simulate Walk</button>
+      <button class="button95" id="themeBtn">Gray Mode</button>
+    </div>
+    <div class="layout">
+      <div class="marquee-box"><marquee behavior="scroll" direction="left">LIVE STORY PASSAGE VIEWER :: ACTIVE PASSAGE OPENS BY PROXIMITY :: COMPASS POINTS TO OTHER NODES :: BEST VIEWED ON A SECURE MOBILE BROWSER</marquee></div>
+      <table class="core">
+        <tr>
+          <td width="62%">
+            <div class="passage-title" id="passageTitle">Waiting for a place</div>
+            <div class="lede" id="passageLede">Move into a trigger radius to show a passage.</div>
+            <div class="meta">
+              <strong>POSITION:</strong> <span id="coordLabel">No coordinates yet</span><br>
+              <strong>HEADING:</strong> <span id="headingLabel">Heading unavailable</span><br>
+              <strong>MODE:</strong> <span id="modeLabel">Idle</span>
+            </div>
+            <div class="bodycopy" id="passageBody">This page only shows the active rendered passage, with a live compass pointing toward the remaining authored passages.</div>
+          </td>
+          <td width="38%">
+            <div class="panel-title">COMPASS TO OTHER PASSAGES</div>
+            <div class="compass-box">
+              <div class="compass" id="compass">
+                <div class="ring"></div>
+                <div class="north">N</div>
+                <div class="heading-arrow" id="headingArrow"></div>
+                <div class="center-dot"></div>
+              </div>
+              <ol class="target-list" id="targets"></ol>
+            </div>
+          </td>
+        </tr>
+      </table>
+    </div>
+    <div class="statusbar">
+      <div id="statusText">Geolocation and orientation both require secure context permissions.</div>
+      <div>Done</div>
+    </div>
+  </div>
+
+  <script>
+    const story = {
+      passages: [
+        { name: 'FerryTerminal', lede: 'Low metal hum from the harbour.', body: 'You arrive at the edge condition between ticketing, weather, and departure.', lat: 44.6488, lng: -63.5752, radius: 45 },
+        { name: 'ClockTower', lede: 'A vertical metronome.', body: 'The city keeps time through stone, repetition, and vantage.', lat: 44.6476, lng: -63.5728, radius: 35 },
+        { name: 'Waterline', lede: 'Exposure to wind and open distance.', body: 'At the waterline the narrative becomes weather-first.', lat: 44.6464, lng: -63.5699, radius: 30 }
+      ]
+    };
+
+    const state = { watchId: null, current: null, heading: null, active: null, mode: 'Idle', gray: true };
+    const $ = s => document.querySelector(s);
+
+    function setMode(mode) { state.mode = mode; $('#modeLabel').textContent = mode; }
+    function normalize(deg) { return (deg % 360 + 360) % 360; }
+    function haversineMeters(aLat, aLng, bLat, bLng) {
+      const R = 6371000, toRad = d => d * Math.PI / 180;
+      const dLat = toRad(bLat - aLat), dLng = toRad(bLng - aLng);
+      const q = Math.sin(dLat/2)**2 + Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * Math.sin(dLng/2)**2;
+      return 2 * R * Math.atan2(Math.sqrt(q), Math.sqrt(1-q));
+    }
+    function bearingDegrees(aLat, aLng, bLat, bLng) {
+      const toRad = d => d * Math.PI / 180, toDeg = r => r * 180 / Math.PI;
+      const φ1 = toRad(aLat), φ2 = toRad(bLat), λ1 = toRad(aLng), λ2 = toRad(bLng);
+      const y = Math.sin(λ2 - λ1) * Math.cos(φ2);
+      const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(λ2 - λ1);
+      return normalize(toDeg(Math.atan2(y, x)));
+    }
+    function getHeadingFromEvent(event) {
+      if (typeof event.webkitCompassHeading === 'number') return event.webkitCompassHeading;
+      if (typeof event.alpha === 'number') return normalize(360 - event.alpha);
+      return null;
+    }
+    function chooseActivePassage() {
+      if (!state.current) return null;
+      const ranked = story.passages.map(p => ({ ...p, distance: haversineMeters(state.current.lat, state.current.lng, p.lat, p.lng) })).sort((a,b) => a.distance - b.distance);
+      const inside = ranked.filter(p => p.distance <= p.radius);
+      return inside[0] || ranked[0] || null;
+    }
+    function renderPassage() {
+      if (!state.active) return;
+      $('#passageTitle').textContent = state.active.name;
+      $('#passageLede').textContent = state.active.lede;
+      $('#passageBody').textContent = state.active.body;
+    }
+    function renderHeading() {
+      $('#headingLabel').textContent = state.heading == null ? 'Heading unavailable' : Math.round(state.heading) + ' degrees';
+      $('#headingArrow').style.transform = 'rotate(' + (state.heading == null ? 0 : state.heading) + 'deg)';
+    }
+    function renderPosition() {
+      $('#coordLabel').textContent = state.current ? state.current.lat.toFixed(5) + ', ' + state.current.lng.toFixed(5) : 'No coordinates yet';
+    }
+    function renderTargets() {
+      const list = $('#targets');
+      const compass = $('#compass');
+      list.innerHTML = '';
+      [].slice.call(compass.querySelectorAll('.marker')).forEach(el => el.remove());
+      if (!state.current || !state.active) return;
+      story.passages
+        .filter(p => p.name !== state.active.name)
+        .map(p => {
+          const distance = haversineMeters(state.current.lat, state.current.lng, p.lat, p.lng);
+          const bearing = bearingDegrees(state.current.lat, state.current.lng, p.lat, p.lng);
+          const relative = state.heading == null ? bearing : normalize(bearing - state.heading);
+          return { ...p, distance, bearing, relative };
+        })
+        .sort((a,b) => a.distance - b.distance)
+        .forEach((p, i) => {
+          const li = document.createElement('li');
+          li.innerHTML = '<strong>' + p.name + '</strong><br>' + Math.round(p.distance) + ' m away<br>Bearing ' + Math.round(p.bearing) + '&deg;';
+          list.appendChild(li);
+          const marker = document.createElement('div');
+          marker.className = 'marker' + (i === 0 ? ' active' : '');
+          marker.style.transform = 'rotate(' + p.relative + 'deg)';
+          marker.innerHTML = '<div class="line"></div><div class="dot"></div>';
+          compass.appendChild(marker);
+        });
+    }
+    function refresh() {
+      state.active = chooseActivePassage();
+      renderPassage();
+      renderPosition();
+      renderHeading();
+      renderTargets();
+      $('#statusText').textContent = state.active ? 'Active passage: ' + state.active.name + '. Compass points toward the remaining passages.' : 'Waiting for a valid location.';
+    }
+    function startGeolocation() {
+      if (!navigator.geolocation) {
+        setMode('Geolocation unsupported');
+        $('#statusText').textContent = 'This browser does not expose navigator.geolocation.';
+        return;
+      }
+      setMode('GPS live');
+      if (state.watchId !== null) navigator.geolocation.clearWatch(state.watchId);
+      state.watchId = navigator.geolocation.watchPosition(
+        pos => { state.current = { lat: pos.coords.latitude, lng: pos.coords.longitude }; refresh(); },
+        err => { setMode('GPS error'); $('#statusText').textContent = err.message; },
+        { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+      );
+    }
+    async function enableOrientation() {
+      try {
+        if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+          const result = await DeviceOrientationEvent.requestPermission();
+          if (result !== 'granted') { $('#statusText').textContent = 'Orientation permission was denied.'; return; }
+        }
+        window.addEventListener('deviceorientation', handleOrientation, true);
+        $('#statusText').textContent = 'Compass heading enabled.';
+      } catch (err) {
+        $('#statusText').textContent = err.message || 'Could not enable orientation.';
+      }
+    }
+    function handleOrientation(event) {
+      const heading = getHeadingFromEvent(event);
+      if (heading == null) return;
+      state.heading = heading;
+      refresh();
+    }
+    function simulate() {
+      setMode('Simulated walk');
+      const path = [
+        { lat: 44.6492, lng: -63.5760, heading: 122 },
+        { lat: 44.6488, lng: -63.5752, heading: 115 },
+        { lat: 44.6478, lng: -63.5735, heading: 108 },
+        { lat: 44.6476, lng: -63.5728, heading: 180 },
+        { lat: 44.6467, lng: -63.5708, heading: 128 },
+        { lat: 44.6464, lng: -63.5699, heading: 96 }
+      ];
+      let i = 0;
+      state.current = { lat: path[0].lat, lng: path[0].lng };
+      state.heading = path[0].heading;
+      refresh();
+      const timer = setInterval(() => {
+        i += 1;
+        if (i >= path.length) { clearInterval(timer); return; }
+        state.current = { lat: path[i].lat, lng: path[i].lng };
+        state.heading = path[i].heading;
+        refresh();
+      }, 1600);
+    }
+    function toggleGrayMode() {
+      document.body.style.filter = document.body.style.filter ? '' : 'grayscale(0.15) contrast(1.02)';
+    }
+    $('#gpsBtn').addEventListener('click', startGeolocation);
+    $('#orientBtn').addEventListener('click', enableOrientation);
+    $('#simBtn').addEventListener('click', simulate);
+    $('#themeBtn').addEventListener('click', toggleGrayMode);
+    refresh();
+  </script>
+</body>
+</html>
