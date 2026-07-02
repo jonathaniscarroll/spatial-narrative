@@ -1,1 +1,30 @@
+:: StoryTitle
+Geolocated SugarCube Example
 
+:: StoryInit
+<<set $geo = {
+  watchId: null,
+  current: null,
+  visible: [],
+  unlocked: []
+}>>
+<<set setup.geo = {}>>
+
+:: Story JavaScript [script]
+setup.geo.parse = function (passageText) {
+  const lines = passageText.split(/\n/);
+  const meta = {};
+  const body = [];
+  for (const line of lines) {
+    if (line.startsWith('@geo ')) {
+      const parts = line.replace('@geo ', '').split(',').map(v => Number(v.trim()));
+      meta.lat = parts[0];
+      meta.lng = parts[1];
+      meta.radius = parts[2] || 30;
+    } else if (line.startsWith('@lede ')) {
+      meta.lede = line.replace('@lede ', '').trim();
+    } else {
+      body.push(line);
+    }
+  }
+<mple.txt" 120L, 3305B           3,0-1         Top
