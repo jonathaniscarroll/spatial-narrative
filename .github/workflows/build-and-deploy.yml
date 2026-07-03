@@ -38,6 +38,12 @@ jobs:
           mkdir -p build
           vendor/tweego/tweego --format=sugarcube-2 -o build/index.html story
 
+      - name: Copy authoring tool
+        run: |
+          if [ -d author ]; then
+            cp -r author build/author
+          fi
+
       - name: Verify output
         run: |
           test -f build/index.html
