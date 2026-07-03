@@ -83,22 +83,6 @@ body {
   overflow: hidden;
   flex-shrink: 0;
 }
-.sidebar-section {
-  border-bottom: 2px solid #808080;
-  padding: 8px 10px;
-  flex-shrink: 0;
-}
-.sidebar-section h3 {
-  font-size: 12px;
-  font-weight: bold;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 6px;
-  background: #000080;
-  color: #fff;
-  padding: 3px 6px;
-  margin: -8px -10px 8px -10px;
-}
 .passage-list {
   flex: 1;
   overflow-y: auto;
@@ -221,7 +205,6 @@ body {
   background: #fff;
   margin-bottom: 4px;
 }
-.hidden { display: none !important; }
 .coord-hint {
   font-size: 11px;
   color: #666;
@@ -247,6 +230,44 @@ body {
 }
 .tab-content { display: none; flex: 1; overflow: hidden; flex-direction: column; }
 .tab-content.active { display: flex; }
+
+/* Inline map popup */
+.map-popup {
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 13px;
+  min-width: 200px;
+}
+.map-popup .popup-title {
+  font-weight: bold;
+  font-size: 12px;
+  text-transform: uppercase;
+  background: #000080;
+  color: #fff;
+  padding: 4px 8px;
+  margin: -8px -12px 8px -12px;
+}
+.map-popup input[type="text"] {
+  width: 100%;
+  border: 2px inset #808080;
+  padding: 4px 6px;
+  font-size: 13px;
+  margin-bottom: 6px;
+  background: #fff;
+  font-family: "Times New Roman", serif;
+}
+.map-popup .popup-coords {
+  font-size: 11px;
+  color: #555;
+  margin-bottom: 8px;
+  font-style: italic;
+}
+.map-popup .popup-actions {
+  display: flex;
+  gap: 6px;
+}
+.map-popup .btn {
+  flex: 1;
+}
 </style>
 </head>
 <body>
@@ -260,7 +281,6 @@ body {
   <input type="password" id="tokenInput" placeholder="GitHub Personal Access Token (repo scope)">
   <button class="btn" id="loadBtn">Load story/main.twee</button>
   <button class="btn primary" id="saveBtn">Save to GitHub</button>
-  <button class="btn" id="newBtn">+ New Geo Passage</button>
   <button class="btn danger" id="deleteBtn">Delete Passage</button>
   <input type="text" id="commitMsg" placeholder="Commit message" style="border:2px inset #808080;padding:3px 6px;font-size:13px;width:200px;background:#fff;">
 </div>
@@ -285,7 +305,7 @@ body {
 
     <div class="tab-content" id="tab-editor">
       <div class="editor-panel" id="editorPanel">
-        <div class="notice">Select a passage from the map or passage list, or click the map to create a new geo passage.</div>
+        <div class="notice">Click anywhere on the map to place a new geo passage, or select an existing marker.</div>
       </div>
     </div>
 
@@ -297,7 +317,7 @@ body {
 </div>
 
 <div class="statusbar">
-  <span id="statusText">Load story/main.twee to begin.</span>
+  <span id="statusText">Load story/main.twee to begin. Click the map to add a passage.</span>
   <span id="passageCount"></span>
 </div>
 
@@ -312,7 +332,7 @@ let passages = [];
 let selectedIndex = null;
 let fileSha = null;
 let markers = {};
-let pendingLatLng = null;
+let activePopup = null;
 
 // --- MAP ---
 const map = L.map('map').setView([44.648, -63.575], 15);
@@ -321,8 +341,75 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 }).addTo(map);
 
 map.on('click', function(e) {
-  pendingLatLng = e.latlng;
-  setStatus('Map clicked: ' + e.latlng.lat.toFixed(6) + ', ' + e.latlng.lng.toFixed(6) + ' — click "+ New Geo Passage" to create here.');
+  // Close any existing creation popup
+  if (activePopup) { map.closePopup(activePopup); activePopup = null; }
+
+  const lat = e.latlng.lat.toFixed(6);
+  const lng = e.latlng.lng.toFixed(6);
+
+  const container = document.createElement('div');
+  container.className = 'map-popup';
+  container.innerHTML = `
+    <div class="popup-title">New Geo Passage</div>
+    <div class="popup-coords">${lat}, ${lng}</div>
+    <input type="text" id="popupName" placeholder="Passage name" value="">
+    <div class="popup-actions">
+      <button class="btn primary" id="popupCreate">Create</button>
+      <button class="btn" id="popupCancel">Cancel</button>
+    </div>
+  `;
+
+  activePopup = L.popup({ closeButton: false, minWidth: 220 })
+    .setLatLng(e.latlng)
+    .setContent(container)
+    .openOn(map);
+
+  // Focus the name input after popup renders
+  setTimeout(() => {
+    const input = document.getElementById('popupName');
+    if (input) input.focus();
+  }, 50);
+
+  container.querySelector('#popupCreate').addEventListener('click', () => {
+    const nameInput = document.getElementById('popupName');
+    const name = nameInput ? nameInput.value.trim() : '';
+    if (!name) { nameInput.style.outline = '2px solid red'; return; }
+
+    passages.push({
+      name,
+      tags: ['geo'],
+      lat: parseFloat(lat),
+      lng: parseFloat(lng),
+      radius: 20,
+      lede: '',
+      dwell: 12000,
+      after: null,
+      then: null,
+      facing: null,
+      dirs: [],
+      body: ''
+    });
+
+    map.closePopup(activePopup);
+    activePopup = null;
+
+    const i = passages.length - 1;
+    buildMarkers();
+    renderPassageList('');
+    selectPassage(i);
+    setStatus('Created "' + name + '" at ' + lat + ', ' + lng + '. Edit in the Editor tab.');
+  });
+
+  container.querySelector('#popupCancel').addEventListener('click', () => {
+    map.closePopup(activePopup);
+    activePopup = null;
+  });
+
+  // Allow Enter key to submit
+  container.querySelector('#popupName') && container.querySelector('#popupName').addEventListener('keydown', e => {
+    if (e.key === 'Enter') container.querySelector('#popupCreate').click();
+    if (e.key === 'Escape') container.querySelector('#popupCancel').click();
+  });
 });
 
 // --- PARSER ---
@@ -428,7 +515,12 @@ function buildMarkers() {
     const marker = L.marker([p.lat, p.lng], { icon, draggable: true }).addTo(map);
     marker.bindTooltip(p.name, { permanent: false, direction: 'top' });
 
-    marker.on('click', () => selectPassage(i));
+    marker.on('click', e => {
+      L.DomEvent.stopPropagation(e);
+      if (activePopup) { map.closePopup(activePopup); activePopup = null; }
+      selectPassage(i);
+    });
+
     marker.on('dragend', e => {
       const ll = e.target.getLatLng();
       passages[i].lat = parseFloat(ll.lat.toFixed(6));
@@ -572,7 +664,6 @@ function renderEditor() {
 function applyEdits() {
   if (selectedIndex === null) return;
   const p = passages[selectedIndex];
-  const oldName = p.name;
 
   p.name = document.getElementById('f_name').value.trim();
   p.tags = document.getElementById('f_tags').value.trim().split(/\s+/).filter(Boolean);
@@ -683,31 +774,6 @@ async function saveFile() {
   }
 }
 
-function newGeoPassage() {
-  const ll = pendingLatLng || map.getCenter();
-  const name = 'NewPlace_' + Date.now().toString().slice(-5);
-  passages.push({
-    name,
-    tags: ['geo'],
-    lat: parseFloat(ll.lat.toFixed(6)),
-    lng: parseFloat(ll.lng.toFixed(6)),
-    radius: 20,
-    lede: '',
-    dwell: 12000,
-    after: null,
-    then: null,
-    facing: null,
-    dirs: [],
-    body: 'New passage text.'
-  });
-  pendingLatLng = null;
-  const i = passages.length - 1;
-  buildMarkers();
-  renderPassageList('');
-  selectPassage(i);
-  setStatus('Created new geo passage "' + name + '". Edit it in the Editor tab.');
-}
-
 function deletePassage() {
   if (selectedIndex === null) { showNotice('Select a passage first.', 'error'); return; }
   const name = passages[selectedIndex].name;
@@ -751,7 +817,6 @@ function switchTab(name) {
 // --- EVENTS ---
 document.getElementById('loadBtn').addEventListener('click', loadFile);
 document.getElementById('saveBtn').addEventListener('click', saveFile);
-document.getElementById('newBtn').addEventListener('click', newGeoPassage);
 document.getElementById('deleteBtn').addEventListener('click', deletePassage);
 document.querySelectorAll('.tab').forEach(t => {
   t.addEventListener('click', () => switchTab(t.dataset.tab));
