@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spatial Narrative — Authoring Tool</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 14px;
+  background: #c0c0c0;
+  color: #000;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.titlebar {
+  background: linear-gradient(90deg, #000080, #1084d0);
+  color: #fff;
+  padding: 6px 12px;
+  font-weight: bold;
+  font-size: 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+}
+.toolbar {
+  background: #d4d0c8;
+  border-bottom: 2px solid #808080;
+  padding: 6px 10px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+.btn {
+  background: #d4d0c8;
+  border-top: 2px solid #fff;
+  border-left: 2px solid #fff;
+  border-right: 2px solid #404040;
+  border-bottom: 2px solid #404040;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-size: 13px;
+  font-family: Arial, sans-serif;
+}
+.btn:active {
+  border-top: 2px solid #404040;
+  border-left: 2px solid #404040;
+  border-right: 2px solid #fff;
+  border-bottom: 2px solid #fff;
+}
+.btn.danger { color: #cc0000; }
+.btn.primary { font-weight: bold; }
+#tokenInput {
+  border: 2px inset #808080;
+  padding: 3px 6px;
+  font-size: 13px;
+  width: 220px;
+  background: #fff;
+}
+.main {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+#map {
+  flex: 1;
+  height: 100%;
+  cursor: crosshair;
+}
+.sidebar {
+  width: 360px;
+  background: #d4d0c8;
+  border-left: 2px solid #808080;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.sidebar-section {
+  border-bottom: 2px solid #808080;
+  padding: 8px 10px;
+  flex-shrink: 0;
+}
+.sidebar-section h3 {
+  font-size: 12px;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+  background: #000080;
+  color: #fff;
+  padding: 3px 6px;
+  margin: -8px -10px 8px -10px;
+}
+.passage-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px;
+  background: #fff;
+  border: 2px inset #808080;
+  margin: 0 4px;
+}
+.passage-item {
+  padding: 5px 8px;
+  cursor: pointer;
+  border-bottom: 1px solid #e0e0e0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.passage-item:hover { background: #000080; color: #fff; }
+.passage-item.selected { background: #000080; color: #fff; }
+.passage-item .ptags {
+  font-size: 11px;
+  opacity: 0.7;
+  font-style: italic;
+}
+.editor-panel {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #d4d0c8;
+}
+.field-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.field-row label {
+  font-size: 12px;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.field-row input,
+.field-row textarea,
+.field-row select {
+  border: 2px inset #808080;
+  padding: 4px 6px;
+  font-size: 13px;
+  font-family: "Times New Roman", serif;
+  background: #fff;
+  width: 100%;
+}
+.field-row textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+.dir-rules {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.dir-rule {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.dir-rule input {
+  width: 60px;
+  border: 2px inset #808080;
+  padding: 3px 5px;
+  font-size: 12px;
+  background: #fff;
+}
+.dir-rule input.target {
+  flex: 1;
+  width: auto;
+}
+.dir-rule .remove-dir {
+  background: #d4d0c8;
+  border-top: 2px solid #fff;
+  border-left: 2px solid #fff;
+  border-right: 2px solid #404040;
+  border-bottom: 2px solid #404040;
+  cursor: pointer;
+  padding: 2px 6px;
+  font-size: 12px;
+  color: #cc0000;
+}
+.statusbar {
+  background: #d4d0c8;
+  border-top: 2px solid #fff;
+  padding: 4px 10px;
+  font-size: 12px;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: space-between;
+}
+.notice {
+  padding: 6px 10px;
+  font-size: 12px;
+  background: #ffffe1;
+  border: 1px solid #808080;
+  margin: 4px;
+}
+.notice.error { background: #ffe1e1; }
+.notice.success { background: #e1ffe1; }
+.section-label {
+  font-size: 11px;
+  font-weight: bold;
+  text-transform: uppercase;
+  color: #000080;
+  margin-bottom: 3px;
+}
+#passageSearch {
+  width: 100%;
+  border: 2px inset #808080;
+  padding: 4px 6px;
+  font-size: 13px;
+  background: #fff;
+  margin-bottom: 4px;
+}
+.hidden { display: none !important; }
+.coord-hint {
+  font-size: 11px;
+  color: #666;
+  font-style: italic;
+}
+.tab-bar {
+  display: flex;
+  border-bottom: 2px solid #808080;
+  flex-shrink: 0;
+}
+.tab {
+  padding: 5px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: bold;
+  border-right: 1px solid #808080;
+  background: #c0c0c0;
+}
+.tab.active {
+  background: #d4d0c8;
+  border-bottom: 2px solid #d4d0c8;
+  margin-bottom: -2px;
+}
+.tab-content { display: none; flex: 1; overflow: hidden; flex-direction: column; }
+.tab-content.active { display: flex; }
+</style>
+</head>
+<body>
+
+<div class="titlebar">
+  <span>Spatial Narrative — Authoring Tool</span>
+  <span id="repoLabel">jonathaniscarroll/spatial-narrative</span>
+</div>
+
+<div class="toolbar">
+  <input type="password" id="tokenInput" placeholder="GitHub Personal Access Token (repo scope)">
+  <button class="btn" id="loadBtn">Load story/main.twee</button>
+  <button class="btn primary" id="saveBtn">Save to GitHub</button>
+  <button class="btn" id="newBtn">+ New Geo Passage</button>
+  <button class="btn danger" id="deleteBtn">Delete Passage</button>
+  <input type="text" id="commitMsg" placeholder="Commit message" style="border:2px inset #808080;padding:3px 6px;font-size:13px;width:200px;background:#fff;">
+</div>
+
+<div id="noticeArea"></div>
+
+<div class="main">
+  <div id="map"></div>
+
+  <div class="sidebar">
+    <div class="tab-bar">
+      <div class="tab active" data-tab="passages">Passages</div>
+      <div class="tab" data-tab="editor">Editor</div>
+      <div class="tab" data-tab="raw">Raw</div>
+    </div>
+
+    <div class="tab-content active" id="tab-passages" style="flex-direction:column;padding:8px;gap:6px;">
+      <div class="section-label">All Passages</div>
+      <input type="text" id="passageSearch" placeholder="Search passages...">
+      <div class="passage-list" id="passageList"></div>
+    </div>
+
+    <div class="tab-content" id="tab-editor">
+      <div class="editor-panel" id="editorPanel">
+        <div class="notice">Select a passage from the map or passage list, or click the map to create a new geo passage.</div>
+      </div>
+    </div>
+
+    <div class="tab-content" id="tab-raw" style="flex-direction:column;padding:8px;gap:6px;">
+      <div class="section-label">Generated .twee block for selected passage</div>
+      <textarea id="rawPreview" style="flex:1;font-family:monospace;font-size:12px;background:#fff;border:2px inset #808080;padding:6px;resize:none;" readonly></textarea>
+    </div>
+  </div>
+</div>
+
+<div class="statusbar">
+  <span id="statusText">Load story/main.twee to begin.</span>
+  <span id="passageCount"></span>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const OWNER = 'jonathaniscarroll';
+const REPO = 'spatial-narrative';
+const FILE_PATH = 'story/main.twee';
+const BRANCH = 'main';
+
+let passages = [];
+let selectedIndex = null;
+let fileSha = null;
+let markers = {};
+let pendingLatLng = null;
+
+// --- MAP ---
+const map = L.map('map').setView([44.648, -63.575], 15);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '© OpenStreetMap contributors'
+}).addTo(map);
+
+map.on('click', function(e) {
+  pendingLatLng = e.latlng;
+  setStatus('Map clicked: ' + e.latlng.lat.toFixed(6) + ', ' + e.latlng.lng.toFixed(6) + ' — click "+ New Geo Passage" to create here.');
+});
+
+// --- PARSER ---
+function parseTwee(text) {
+  const blocks = text.split(/(?=^:: )/m).filter(b => b.trim());
+  return blocks.map(block => {
+    const lines = block.split('\n');
+    const header = lines[0];
+    const headerMatch = header.match(/^:: (.+?)(?:\s+\[(.*)\])?\s*$/);
+    if (!headerMatch) return null;
+
+    const name = headerMatch[1].trim();
+    const tags = headerMatch[2] ? headerMatch[2].split(/\s+/).filter(Boolean) : [];
+
+    let lat = null, lng = null, radius = 30;
+    let lede = '', dwell = null, after = null, then_ = null, facing = null;
+    const dirs = [];
+    const bodyLines = [];
+
+    lines.slice(1).forEach(line => {
+      const t = line.trim();
+      if (t.startsWith('@geo ')) {
+        const parts = t.slice(5).split(',').map(v => parseFloat(v.trim()));
+        lat = parts[0]; lng = parts[1];
+        if (isFinite(parts[2])) radius = parts[2];
+      } else if (t.startsWith('@lede ')) {
+        lede = t.slice(6).trim();
+      } else if (t.startsWith('@dwell ')) {
+        dwell = parseInt(t.slice(7).trim(), 10);
+      } else if (t.startsWith('@after ')) {
+        after = parseInt(t.slice(7).trim(), 10);
+      } else if (t.startsWith('@then ')) {
+        then_ = t.slice(6).trim();
+      } else if (t.startsWith('@facing ')) {
+        facing = parseFloat(t.slice(8).trim());
+      } else if (t.startsWith('@dir ')) {
+        const spec = t.slice(5).trim();
+        const pair = spec.split(':');
+        if (pair.length === 2) {
+          const range = pair[0].split('-');
+          dirs.push({ start: parseFloat(range[0]), end: parseFloat(range[1]), target: pair[1].trim() });
+        }
+      } else if (t.startsWith('<span class="nav-hidden">')) {
+        // skip
+      } else {
+        bodyLines.push(line);
+      }
+    });
+
+    return {
+      name, tags,
+      lat, lng, radius,
+      lede, dwell, after, then: then_, facing,
+      dirs,
+      body: bodyLines.join('\n').replace(/^\n+|\n+$/g, ''),
+      _raw: block
+    };
+  }).filter(Boolean);
+}
+
+function serializePassage(p) {
+  const tagStr = p.tags.length ? ' [' + p.tags.join(' ') + ']' : '';
+  let out = ':: ' + p.name + tagStr + '\n';
+
+  if (p.tags.includes('geo') && isFinite(p.lat) && isFinite(p.lng)) {
+    out += '@geo ' + p.lat.toFixed(6) + ',' + p.lng.toFixed(6) + ',' + (p.radius || 30) + '\n';
+  }
+  if (p.lede) out += '@lede ' + p.lede + '\n';
+  if (p.dwell != null) out += '@dwell ' + p.dwell + '\n';
+  if (p.facing != null) out += '@facing ' + p.facing + '\n';
+  if (p.after != null) out += '@after ' + p.after + '\n';
+  if (p.then) out += '@then ' + p.then + '\n';
+  p.dirs.forEach(d => {
+    out += '@dir ' + d.start + '-' + d.end + ':' + d.target + '\n';
+  });
+  if (p.body) out += '\n' + p.body + '\n';
+  return out;
+}
+
+function serializeAll() {
+  return passages.map(serializePassage).join('\n');
+}
+
+// --- MARKERS ---
+function clearMarkers() {
+  Object.values(markers).forEach(m => map.removeLayer(m));
+  markers = {};
+}
+
+function buildMarkers() {
+  clearMarkers();
+  passages.forEach((p, i) => {
+    if (!p.tags.includes('geo') || !isFinite(p.lat) || !isFinite(p.lng)) return;
+
+    const isSelected = i === selectedIndex;
+    const icon = L.divIcon({
+      className: '',
+      html: '<div style="width:14px;height:14px;background:' + (isSelected ? '#ff9900' : '#000080') + ';border:2px solid #fff;border-radius:50%;box-shadow:0 0 3px #000;"></div>',
+      iconSize: [14, 14],
+      iconAnchor: [7, 7]
+    });
+
+    const marker = L.marker([p.lat, p.lng], { icon, draggable: true }).addTo(map);
+    marker.bindTooltip(p.name, { permanent: false, direction: 'top' });
+
+    marker.on('click', () => selectPassage(i));
+    marker.on('dragend', e => {
+      const ll = e.target.getLatLng();
+      passages[i].lat = parseFloat(ll.lat.toFixed(6));
+      passages[i].lng = parseFloat(ll.lng.toFixed(6));
+      if (selectedIndex === i) renderEditor();
+      setStatus('Moved ' + passages[i].name + ' to ' + passages[i].lat + ', ' + passages[i].lng);
+      updateRawPreview();
+    });
+
+    if (isFinite(p.radius)) {
+      L.circle([p.lat, p.lng], { radius: p.radius, color: '#000080', weight: 1, fillOpacity: 0.08 }).addTo(map);
+    }
+
+    markers[i] = marker;
+  });
+}
+
+// --- PASSAGE LIST ---
+function renderPassageList(filter) {
+  const list = document.getElementById('passageList');
+  list.innerHTML = '';
+  passages.forEach((p, i) => {
+    if (filter && !p.name.toLowerCase().includes(filter.toLowerCase())) return;
+    const item = document.createElement('div');
+    item.className = 'passage-item' + (i === selectedIndex ? ' selected' : '');
+    item.innerHTML = '<span>' + escHtml(p.name) + '</span><span class="ptags">' + p.tags.join(' ') + '</span>';
+    item.addEventListener('click', () => selectPassage(i));
+    list.appendChild(item);
+  });
+  document.getElementById('passageCount').textContent = passages.length + ' passages';
+}
+
+function selectPassage(i) {
+  selectedIndex = i;
+  buildMarkers();
+  renderPassageList(document.getElementById('passageSearch').value);
+  renderEditor();
+  updateRawPreview();
+  switchTab('editor');
+
+  const p = passages[i];
+  if (isFinite(p.lat) && isFinite(p.lng)) {
+    map.panTo([p.lat, p.lng]);
+  }
+}
+
+// --- EDITOR ---
+function renderEditor() {
+  const panel = document.getElementById('editorPanel');
+  if (selectedIndex === null || !passages[selectedIndex]) {
+    panel.innerHTML = '<div class="notice">No passage selected.</div>';
+    return;
+  }
+  const p = passages[selectedIndex];
+  const isGeo = p.tags.includes('geo');
+
+  panel.innerHTML = `
+    <div class="field-row">
+      <label>Passage Name</label>
+      <input type="text" id="f_name" value="${escAttr(p.name)}">
+    </div>
+    <div class="field-row">
+      <label>Tags (space separated)</label>
+      <input type="text" id="f_tags" value="${escAttr(p.tags.join(' '))}">
+    </div>
+    ${isGeo ? `
+    <div class="field-row">
+      <label>Latitude</label>
+      <input type="number" step="0.000001" id="f_lat" value="${p.lat ?? ''}">
+      <span class="coord-hint">Drag marker on map to update, or type here.</span>
+    </div>
+    <div class="field-row">
+      <label>Longitude</label>
+      <input type="number" step="0.000001" id="f_lng" value="${p.lng ?? ''}">
+    </div>
+    <div class="field-row">
+      <label>Radius (metres)</label>
+      <input type="number" id="f_radius" value="${p.radius ?? 30}">
+    </div>
+    <div class="field-row">
+      <label>Dwell (ms)</label>
+      <input type="number" id="f_dwell" value="${p.dwell ?? ''}" placeholder="12000">
+    </div>
+    <div class="field-row">
+      <label>Facing Threshold (degrees, optional)</label>
+      <input type="number" id="f_facing" value="${p.facing ?? ''}" placeholder="35">
+    </div>
+    <div class="field-row">
+      <label>After (ms until second-stage)</label>
+      <input type="number" id="f_after" value="${p.after ?? ''}" placeholder="leave blank if none">
+    </div>
+    <div class="field-row">
+      <label>Then (second-stage passage name)</label>
+      <input type="text" id="f_then" value="${escAttr(p.then ?? '')}" placeholder="leave blank if none">
+    </div>
+    <div class="field-row">
+      <label>Directional Variants (@dir)</label>
+      <div class="dir-rules" id="dirRules">
+        ${p.dirs.map((d, di) => `
+          <div class="dir-rule" data-di="${di}">
+            <input type="number" class="dir-start" value="${d.start}" placeholder="start°">
+            <span>-</span>
+            <input type="number" class="dir-end" value="${d.end}" placeholder="end°">
+            <input type="text" class="target" value="${escAttr(d.target)}" placeholder="passage name">
+            <button class="remove-dir" data-di="${di}">✕</button>
+          </div>
+        `).join('')}
+      </div>
+      <button class="btn" id="addDirBtn" style="margin-top:4px;">+ Add @dir Rule</button>
+    </div>
+    ` : ''}
+    <div class="field-row">
+      <label>Lede</label>
+      <input type="text" id="f_lede" value="${escAttr(p.lede ?? '')}">
+    </div>
+    <div class="field-row">
+      <label>Body Text</label>
+      <textarea id="f_body" rows="6">${escHtml(p.body ?? '')}</textarea>
+    </div>
+    <button class="btn primary" id="applyBtn">Apply Changes</button>
+  `;
+
+  document.getElementById('applyBtn').addEventListener('click', applyEdits);
+  const addDir = document.getElementById('addDirBtn');
+  if (addDir) addDir.addEventListener('click', () => {
+    passages[selectedIndex].dirs.push({ start: 0, end: 45, target: '' });
+    renderEditor();
+    updateRawPreview();
+  });
+
+  document.querySelectorAll('.remove-dir').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const di = parseInt(btn.dataset.di, 10);
+      passages[selectedIndex].dirs.splice(di, 1);
+      renderEditor();
+      updateRawPreview();
+    });
+  });
+}
+
+function applyEdits() {
+  if (selectedIndex === null) return;
+  const p = passages[selectedIndex];
+  const oldName = p.name;
+
+  p.name = document.getElementById('f_name').value.trim();
+  p.tags = document.getElementById('f_tags').value.trim().split(/\s+/).filter(Boolean);
+  p.lede = document.getElementById('f_lede').value.trim();
+  p.body = document.getElementById('f_body').value;
+
+  if (p.tags.includes('geo')) {
+    p.lat = parseFloat(document.getElementById('f_lat').value);
+    p.lng = parseFloat(document.getElementById('f_lng').value);
+    p.radius = parseFloat(document.getElementById('f_radius').value) || 30;
+    p.dwell = parseInt(document.getElementById('f_dwell').value, 10) || null;
+    const facingVal = parseFloat(document.getElementById('f_facing').value);
+    p.facing = isFinite(facingVal) ? facingVal : null;
+    const afterVal = parseInt(document.getElementById('f_after').value, 10);
+    p.after = isFinite(afterVal) ? afterVal : null;
+    p.then = document.getElementById('f_then').value.trim() || null;
+
+    const dirRules = document.querySelectorAll('.dir-rule');
+    p.dirs = Array.from(dirRules).map(row => ({
+      start: parseFloat(row.querySelector('.dir-start').value),
+      end: parseFloat(row.querySelector('.dir-end').value),
+      target: row.querySelector('.target').value.trim()
+    })).filter(d => isFinite(d.start) && isFinite(d.end) && d.target);
+  }
+
+  buildMarkers();
+  renderPassageList(document.getElementById('passageSearch').value);
+  updateRawPreview();
+  setStatus('Applied changes to "' + p.name + '".');
+}
+
+function updateRawPreview() {
+  const el = document.getElementById('rawPreview');
+  if (selectedIndex !== null && passages[selectedIndex]) {
+    el.value = serializePassage(passages[selectedIndex]);
+  } else {
+    el.value = '';
+  }
+}
+
+// --- GITHUB ---
+function getToken() {
+  return document.getElementById('tokenInput').value.trim();
+}
+
+async function loadFile() {
+  const token = getToken();
+  if (!token) { showNotice('Enter a GitHub Personal Access Token first.', 'error'); return; }
+
+  setStatus('Loading story/main.twee...');
+  try {
+    const res = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/contents/${FILE_PATH}?ref=${BRANCH}`, {
+      headers: { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github.v3+json' }
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    fileSha = data.sha;
+    const decoded = decodeBase64Unicode(data.content.replace(/\n/g, ''));
+    passages = parseTwee(decoded);
+    buildMarkers();
+    renderPassageList('');
+    setStatus('Loaded ' + passages.length + ' passages from story/main.twee.');
+    showNotice('Loaded ' + passages.length + ' passages.', 'success');
+
+    const geoPassages = passages.filter(p => p.tags.includes('geo') && isFinite(p.lat));
+    if (geoPassages.length > 0) {
+      const lats = geoPassages.map(p => p.lat);
+      const lngs = geoPassages.map(p => p.lng);
+      map.fitBounds([[Math.min(...lats)-0.002, Math.min(...lngs)-0.002],[Math.max(...lats)+0.002, Math.max(...lngs)+0.002]]);
+    }
+  } catch(e) {
+    showNotice('Load failed: ' + e.message, 'error');
+    setStatus('Load failed.');
+  }
+}
+
+async function saveFile() {
+  const token = getToken();
+  if (!token) { showNotice('Enter a GitHub Personal Access Token first.', 'error'); return; }
+  if (!fileSha) { showNotice('Load the file first before saving.', 'error'); return; }
+
+  const msg = document.getElementById('commitMsg').value.trim() || 'Update story/main.twee via authoring tool';
+  const content = serializeAll();
+  const encoded = btoa(unescape(encodeURIComponent(content)));
+
+  setStatus('Saving...');
+  try {
+    const res = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/contents/${FILE_PATH}`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': 'token ' + token,
+        'Accept': 'application/vnd.github.v3+json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ message: msg, content: encoded, sha: fileSha, branch: BRANCH })
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.message || 'HTTP ' + res.status);
+    }
+    const data = await res.json();
+    fileSha = data.content.sha;
+    showNotice('Saved successfully. Commit: ' + data.commit.sha.slice(0,7), 'success');
+    setStatus('Saved to story/main.twee.');
+  } catch(e) {
+    showNotice('Save failed: ' + e.message, 'error');
+    setStatus('Save failed.');
+  }
+}
+
+function newGeoPassage() {
+  const ll = pendingLatLng || map.getCenter();
+  const name = 'NewPlace_' + Date.now().toString().slice(-5);
+  passages.push({
+    name,
+    tags: ['geo'],
+    lat: parseFloat(ll.lat.toFixed(6)),
+    lng: parseFloat(ll.lng.toFixed(6)),
+    radius: 20,
+    lede: '',
+    dwell: 12000,
+    after: null,
+    then: null,
+    facing: null,
+    dirs: [],
+    body: 'New passage text.'
+  });
+  pendingLatLng = null;
+  const i = passages.length - 1;
+  buildMarkers();
+  renderPassageList('');
+  selectPassage(i);
+  setStatus('Created new geo passage "' + name + '". Edit it in the Editor tab.');
+}
+
+function deletePassage() {
+  if (selectedIndex === null) { showNotice('Select a passage first.', 'error'); return; }
+  const name = passages[selectedIndex].name;
+  if (!confirm('Delete passage "' + name + '"? This cannot be undone until you reload.')) return;
+  passages.splice(selectedIndex, 1);
+  selectedIndex = null;
+  buildMarkers();
+  renderPassageList('');
+  document.getElementById('editorPanel').innerHTML = '<div class="notice">Passage deleted. Save to commit.</div>';
+  document.getElementById('rawPreview').value = '';
+  setStatus('Deleted "' + name + '".');
+}
+
+// --- UI HELPERS ---
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function escAttr(s) {
+  return String(s).replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function setStatus(msg) {
+  document.getElementById('statusText').textContent = msg;
+}
+function showNotice(msg, type) {
+  const area = document.getElementById('noticeArea');
+  const div = document.createElement('div');
+  div.className = 'notice' + (type === 'error' ? ' error' : type === 'success' ? ' success' : '');
+  div.textContent = msg;
+  area.innerHTML = '';
+  area.appendChild(div);
+  setTimeout(() => div.remove(), 5000);
+}
+function decodeBase64Unicode(b64) {
+  return decodeURIComponent(atob(b64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''));
+}
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  document.querySelectorAll('.tab-content').forEach(tc => tc.classList.toggle('active', tc.id === 'tab-' + name));
+}
+
+// --- EVENTS ---
+document.getElementById('loadBtn').addEventListener('click', loadFile);
+document.getElementById('saveBtn').addEventListener('click', saveFile);
+document.getElementById('newBtn').addEventListener('click', newGeoPassage);
+document.getElementById('deleteBtn').addEventListener('click', deletePassage);
+document.querySelectorAll('.tab').forEach(t => {
+  t.addEventListener('click', () => switchTab(t.dataset.tab));
+});
+document.getElementById('passageSearch').addEventListener('input', e => {
+  renderPassageList(e.target.value);
+});
+</script>
+</body>
+</html>
