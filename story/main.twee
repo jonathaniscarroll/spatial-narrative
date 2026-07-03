@@ -68,6 +68,12 @@ Geo Passage Navigator Core
             <strong>DISPLAY:</strong> <span id="displayLabel">None</span>
           </div>
           <div class="bodycopy" id="passageBody">This page only shows the active rendered passage, with a live compass pointing toward the linked passages.</div>
+          <div class="passage-image-wrap" id="passageImageWrap" style="display:none;">
+            <img id="passageImage" src="" alt="" style="max-width:100%;margin-bottom:10px;border:2px inset #c0c0c0;">
+          </div>
+          <div class="passage-audio-wrap" id="passageAudioWrap" style="display:none;">
+            <audio id="passageAudio" controls style="width:100%;margin-bottom:10px;"></audio>
+          </div>
           <div id="passages" style="display:none;"></div>
         </td>
         <td width="38%">
@@ -401,6 +407,41 @@ table.core td {
 window.setup = window.setup || {};
 setup.geo = setup.geo || {};
 
+// ── PWA / iOS home-screen app meta injection ──────────────────────────────
+setup.geo.injectAppMeta = function () {
+  if (document.getElementById('geo-app-meta-injected')) {
+    return;
+  }
+  var head = document.head;
+  var tags = [
+    { name: 'apple-mobile-web-app-capable',       content: 'yes' },
+    { name: 'apple-mobile-web-app-status-bar-style', content: 'black-translucent' },
+    { name: 'apple-mobile-web-app-title',          content: 'GeoNav' },
+    { name: 'mobile-web-app-capable',              content: 'yes' },
+    { name: 'theme-color',                         content: '#000080' }
+  ];
+  tags.forEach(function (t) {
+    var m = document.createElement('meta');
+    m.name = t.name;
+    m.content = t.content;
+    head.appendChild(m);
+  });
+  // Apple touch icon
+  var iconLink = document.createElement('link');
+  iconLink.rel = 'apple-touch-icon';
+  iconLink.href = 'icon-180.png';
+  head.appendChild(iconLink);
+  // Web manifest (Android / Chrome)
+  var manifestLink = document.createElement('link');
+  manifestLink.rel = 'manifest';
+  manifestLink.href = 'manifest.json';
+  head.appendChild(manifestLink);
+  // Sentinel so we only run once
+  var sentinel = document.createElement('meta');
+  sentinel.id = 'geo-app-meta-injected';
+  head.appendChild(sentinel);
+};
+
 setup.geo.normalize = function (deg) {
   return (deg % 360 + 360) % 360;
 };
@@ -412,261 +453,186 @@ setup.geo.angleDelta = function (a, b) {
 
 setup.geo.headingInSector = function (heading, start, end) {
   heading = setup.geo.normalize(heading);
-  start = setup.geo.normalize(start);
-  end = setup.geo.normalize(end);
-
-  if (start <= end) {
-    return heading >= start && heading <= end;
-  }
-
+  start   = setup.geo.normalize(start);
+  end     = setup.geo.normalize(end);
+  if (start <= end) { return heading >= start && heading <= end; }
   return heading >= start || heading <= end;
 };
 
 setup.geo.setMode = function (mode) {
   State.variables.geo.mode = mode;
-  var el = document.getElementById("modeLabel");
-  if (el) {
-    el.textContent = mode;
-  }
+  var el = document.getElementById('modeLabel');
+  if (el) { el.textContent = mode; }
 };
 
+// ── Passage parser ────────────────────────────────────────────────────────
 setup.geo.parse = function (passageText) {
   var lines = passageText.split(/\n/);
   var meta = {
-    lat: null,
-    lng: null,
-    radius: 30,
-    lede: "",
-    dwell: null,
-    facing: null,
-    after: null,
-    then: null,
+    lat: null, lng: null, radius: 30,
+    lede: '', dwell: null, facing: null,
+    after: null, then: null,
+    image: null, audio: null,
     dirs: []
   };
   var body = [];
 
   lines.forEach(function (line) {
-    var trimmed = line.trim();
-
-    if (trimmed.indexOf("@geo ") === 0) {
-      var parts = trimmed.slice(5).split(",").map(function (v) {
-        return Number(v.trim());
-      });
-      meta.lat = parts[0];
-      meta.lng = parts[1];
+    var t = line.trim();
+    if      (t.indexOf('@geo ')    === 0) {
+      var parts = t.slice(5).split(',').map(function (v) { return Number(v.trim()); });
+      meta.lat    = parts[0];
+      meta.lng    = parts[1];
       meta.radius = Number.isFinite(parts[2]) ? parts[2] : 30;
     }
-    else if (trimmed.indexOf("@lede ") === 0) {
-      meta.lede = trimmed.slice(6).trim();
-    }
-    else if (trimmed.indexOf("@dwell ") === 0) {
-      meta.dwell = Number(trimmed.slice(7).trim());
-    }
-    else if (trimmed.indexOf("@facing ") === 0) {
-      meta.facing = Number(trimmed.slice(8).trim());
-    }
-    else if (trimmed.indexOf("@after ") === 0) {
-      meta.after = Number(trimmed.slice(7).trim());
-    }
-    else if (trimmed.indexOf("@then ") === 0) {
-      meta.then = trimmed.slice(6).trim();
-    }
-    else if (trimmed.indexOf("@dir ") === 0) {
-      var spec = trimmed.slice(5).trim();
-      var pair = spec.split(":");
+    else if (t.indexOf('@lede ')   === 0) { meta.lede   = t.slice(6).trim(); }
+    else if (t.indexOf('@dwell ')  === 0) { meta.dwell  = Number(t.slice(7).trim()); }
+    else if (t.indexOf('@facing ') === 0) { meta.facing = Number(t.slice(8).trim()); }
+    else if (t.indexOf('@after ')  === 0) { meta.after  = Number(t.slice(7).trim()); }
+    else if (t.indexOf('@then ')   === 0) { meta.then   = t.slice(6).trim(); }
+    else if (t.indexOf('@image ')  === 0) { meta.image  = t.slice(7).trim(); }
+    else if (t.indexOf('@audio ')  === 0) { meta.audio  = t.slice(7).trim(); }
+    else if (t.indexOf('@dir ')    === 0) {
+      var spec  = t.slice(5).trim();
+      var pair  = spec.split(':');
       if (pair.length === 2) {
-        var range = pair[0].split("-");
+        var range  = pair[0].split('-');
         var target = pair[1].trim();
-        var start = Number(range[0]);
-        var end = Number(range[1]);
+        var start  = Number(range[0]);
+        var end    = Number(range[1]);
         if (Number.isFinite(start) && Number.isFinite(end) && target) {
-          meta.dirs.push({
-            start: start,
-            end: end,
-            target: target
-          });
+          meta.dirs.push({ start: start, end: end, target: target });
         }
       }
     }
-    else if (trimmed.indexOf("<span class=\"nav-hidden\">") === 0) {
-    }
-    else {
-      body.push(line);
-    }
+    else if (t.indexOf('<span class="nav-hidden">') === 0) { /* skip */ }
+    else { body.push(line); }
   });
 
-  meta.body = body.join("\n").trim();
+  meta.body = body.join('\n').trim();
   return meta;
 };
 
 setup.geo.distance = function (aLat, aLng, bLat, bLng) {
-  var R = 6371000;
+  var R    = 6371000;
   var toRad = function (d) { return d * Math.PI / 180; };
   var dLat = toRad(bLat - aLat);
   var dLng = toRad(bLng - aLng);
-
   var q =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) *
     Math.sin(dLng / 2) * Math.sin(dLng / 2);
-
   return 2 * R * Math.atan2(Math.sqrt(q), Math.sqrt(1 - q));
 };
 
 setup.geo.bearing = function (aLat, aLng, bLat, bLng) {
-  var toRad = function (d) { return d * Math.PI / 180; };
-  var toDeg = function (r) { return r * 180 / Math.PI; };
-  var phi1 = toRad(aLat);
-  var phi2 = toRad(bLat);
-  var lambda1 = toRad(aLng);
-  var lambda2 = toRad(bLng);
-
-  var y = Math.sin(lambda2 - lambda1) * Math.cos(phi2);
-  var x = Math.cos(phi1) * Math.sin(phi2) -
-    Math.sin(phi1) * Math.cos(phi2) * Math.cos(lambda2 - lambda1);
-
+  var toRad  = function (d) { return d * Math.PI / 180; };
+  var toDeg  = function (r) { return r * 180 / Math.PI; };
+  var phi1   = toRad(aLat);
+  var phi2   = toRad(bLat);
+  var lam1   = toRad(aLng);
+  var lam2   = toRad(bLng);
+  var y      = Math.sin(lam2 - lam1) * Math.cos(phi2);
+  var x      = Math.cos(phi1) * Math.sin(phi2) -
+               Math.sin(phi1) * Math.cos(phi2) * Math.cos(lam2 - lam1);
   return setup.geo.normalize(toDeg(Math.atan2(y, x)));
 };
 
 setup.geo.getHeadingFromEvent = function (event) {
-  if (typeof event.webkitCompassHeading === "number") {
-    return event.webkitCompassHeading;
-  }
-  if (typeof event.alpha === "number") {
-    return setup.geo.normalize(360 - event.alpha);
-  }
+  if (typeof event.webkitCompassHeading === 'number') { return event.webkitCompassHeading; }
+  if (typeof event.alpha === 'number') { return setup.geo.normalize(360 - event.alpha); }
   return null;
 };
 
 setup.geo.points = function () {
-  return Story.lookup("tags", "geo")
+  return Story.lookup('tags', 'geo')
     .map(function (p) {
       var parsed = setup.geo.parse(p.text);
       return {
-        name: p.title,
-        tags: p.tags,
-        lat: parsed.lat,
-        lng: parsed.lng,
-        radius: parsed.radius,
-        lede: parsed.lede,
-        body: parsed.body,
-        dwell: parsed.dwell,
-        facing: parsed.facing,
-        after: parsed.after,
-        then: parsed.then,
+        name: p.title, tags: p.tags,
+        lat: parsed.lat, lng: parsed.lng, radius: parsed.radius,
+        lede: parsed.lede, body: parsed.body,
+        dwell: parsed.dwell, facing: parsed.facing,
+        after: parsed.after, then: parsed.then,
+        image: parsed.image, audio: parsed.audio,
         dirs: parsed.dirs
       };
     })
-    .filter(function (p) {
-      return Number.isFinite(p.lat) && Number.isFinite(p.lng);
-    });
+    .filter(function (p) { return Number.isFinite(p.lat) && Number.isFinite(p.lng); });
 };
 
 setup.geo.getPointByName = function (name) {
-  return setup.geo.points().find(function (p) {
-    return p.name === name;
-  }) || null;
+  return setup.geo.points().find(function (p) { return p.name === name; }) || null;
 };
 
 setup.geo.getParsedPassageByName = function (name) {
-  if (!name || !Story.has(name)) {
-    return null;
-  }
-  var parsed = setup.geo.parse(Story.get(name).text);
+  if (!name || !Story.has(name)) { return null; }
+  var parsed  = setup.geo.parse(Story.get(name).text);
   parsed.name = name;
   return parsed;
 };
 
 setup.geo.getLinkedTargets = function (passageName) {
-  if (!passageName || !Story.has(passageName)) {
-    return [];
-  }
-
-  var text = Story.get(passageName).text;
+  if (!passageName || !Story.has(passageName)) { return []; }
+  var text   = Story.get(passageName).text;
   var targets = [];
-  var seen = Object.create(null);
-  var chunks = text.split("[[");
-
+  var seen   = Object.create(null);
+  var chunks = text.split('[[');
   chunks.slice(1).forEach(function (chunk) {
-    var end = chunk.indexOf("]]");
-    if (end === -1) {
-      return;
-    }
-
-    var raw = chunk.slice(0, end).trim();
+    var end = chunk.indexOf(']]');
+    if (end === -1) { return; }
+    var raw    = chunk.slice(0, end).trim();
     var target = raw;
-
-    if (raw.indexOf("->") !== -1) {
-      target = raw.split("->")[1].trim();
-    }
-    else if (raw.indexOf("<-") !== -1) {
-      target = raw.split("<-")[0].trim();
-    }
-    else if (raw.indexOf("|") !== -1) {
-      target = raw.split("|")[1].trim();
-    }
-
-    if (!seen[target]) {
-      seen[target] = true;
-      targets.push(target);
-    }
+    if (raw.indexOf('->') !== -1)      { target = raw.split('->')[1].trim(); }
+    else if (raw.indexOf('<-') !== -1) { target = raw.split('<-')[0].trim(); }
+    else if (raw.indexOf('|') !== -1)  { target = raw.split('|')[1].trim(); }
+    if (!seen[target]) { seen[target] = true; targets.push(target); }
   });
-
   return targets;
 };
 
 setup.geo.chooseCandidatePassage = function () {
   var v = State.variables.geo;
-  if (!v.current) {
-    return null;
-  }
-
+  if (!v.current) { return null; }
   var ranked = setup.geo.points()
     .map(function (p) {
       return Object.assign({}, p, {
         distance: setup.geo.distance(v.current.lat, v.current.lng, p.lat, p.lng)
       });
     })
-    .sort(function (a, b) {
-      return a.distance - b.distance;
-    });
-
-  var inside = ranked.filter(function (p) {
-    return p.distance <= p.radius;
-  });
-
+    .sort(function (a, b) { return a.distance - b.distance; });
+  var inside = ranked.filter(function (p) { return p.distance <= p.radius; });
   return inside[0] || null;
 };
 
 setup.geo.updateActiveByDwell = function () {
-  var v = State.variables.geo;
-  var now = Date.now();
+  var v         = State.variables.geo;
+  var now       = Date.now();
   var candidate = setup.geo.chooseCandidatePassage();
 
   if (!candidate) {
-    // Outside all radii — clear candidate tracking but keep active/displayed intact
-    v.candidate = null;
+    // Outside all radii — preserve active/displayed, clear candidate tracking only
+    v.candidate      = null;
     v.candidateSince = null;
     return;
   }
 
   if (!v.candidate || v.candidate.name !== candidate.name) {
-    v.candidate = candidate;
+    v.candidate      = candidate;
     v.candidateSince = now;
     return;
   }
 
   v.candidate = candidate;
-
   var dwellNeeded = Number.isFinite(candidate.dwell) ? candidate.dwell : v.dwellMs;
-  var elapsed = now - v.candidateSince;
+  var elapsed     = now - v.candidateSince;
 
   if (!v.active || v.active.name !== candidate.name) {
     if (elapsed >= dwellNeeded) {
-      v.active = candidate;
+      v.active        = candidate;
       v.displayedBase = candidate.name;
-      v.displayed = candidate.name;
-      v.stageSince = now;
+      v.displayed     = candidate.name;
+      v.stageSince    = now;
       if (v.unlocked.indexOf(candidate.name) === -1) {
         v.unlocked.push(candidate.name);
       }
@@ -676,246 +642,260 @@ setup.geo.updateActiveByDwell = function () {
 
 setup.geo.getDwellProgress = function () {
   var v = State.variables.geo;
-
-  if (!v.candidate || !v.candidateSince) {
-    return null;
-  }
-
+  if (!v.candidate || !v.candidateSince) { return null; }
   var dwellNeeded = Number.isFinite(v.candidate.dwell) ? v.candidate.dwell : v.dwellMs;
-  var elapsed = Date.now() - v.candidateSince;
-  var pct = Math.max(0, Math.min(1, elapsed / dwellNeeded));
-
-  return {
-    name: v.candidate.name,
-    elapsed: elapsed,
-    required: dwellNeeded,
-    pct: pct
-  };
+  var elapsed     = Date.now() - v.candidateSince;
+  var pct         = Math.max(0, Math.min(1, elapsed / dwellNeeded));
+  return { name: v.candidate.name, elapsed: elapsed, required: dwellNeeded, pct: pct };
 };
 
 setup.geo.chooseDirectionalPassage = function (basePassage) {
   var v = State.variables.geo;
-
   if (!basePassage || !basePassage.dirs || !basePassage.dirs.length || v.heading == null) {
     return null;
   }
-
   for (var i = 0; i < basePassage.dirs.length; i += 1) {
     var rule = basePassage.dirs[i];
     if (setup.geo.headingInSector(v.heading, rule.start, rule.end) && Story.has(rule.target)) {
       return rule.target;
     }
   }
-
   return null;
 };
 
 setup.geo.updateDisplayedPassage = function () {
   var v = State.variables.geo;
-
-  if (!v.active) {
-    return;
-  }
+  if (!v.active) { return; }
 
   if (v.displayedBase !== v.active.name) {
     v.displayedBase = v.active.name;
-    v.displayed = v.active.name;
-    v.stageSince = Date.now();
+    v.displayed     = v.active.name;
+    v.stageSince    = Date.now();
   }
 
   var baseName = v.active.name;
-
   if (Number.isFinite(v.active.after) && v.active.then && Story.has(v.active.then)) {
     var elapsed = Date.now() - v.stageSince;
-    if (elapsed >= v.active.after) {
-      baseName = v.active.then;
-    }
+    if (elapsed >= v.active.after) { baseName = v.active.then; }
   }
 
-  v.displayedBase = baseName;
-
-  var baseParsed = setup.geo.getParsedPassageByName(baseName);
-  var directional = setup.geo.chooseDirectionalPassage(baseParsed);
-
-  v.displayed = directional || baseName;
+  v.displayedBase  = baseName;
+  var baseParsed   = setup.geo.getParsedPassageByName(baseName);
+  var directional  = setup.geo.chooseDirectionalPassage(baseParsed);
+  v.displayed      = directional || baseName;
 };
 
 setup.geo.refreshVisible = function () {
   var v = State.variables.geo;
-
-  if (!v.current || !v.active) {
-    v.visible = [];
-    return;
-  }
+  if (!v.current || !v.active) { v.visible = []; return; }
 
   var linked = setup.geo.getLinkedTargets(v.active.name);
-
   v.visible = linked
-    .filter(function (name) {
-      return name !== v.active.name && Story.has(name);
-    })
-    .map(function (name) {
-      return setup.geo.getPointByName(name);
-    })
-    .filter(function (p) {
-      return !!p;
-    })
+    .filter(function (name) { return name !== v.active.name && Story.has(name); })
+    .map(function (name)    { return setup.geo.getPointByName(name); })
+    .filter(function (p)    { return !!p; })
     .map(function (p) {
-      var distance = setup.geo.distance(v.current.lat, v.current.lng, p.lat, p.lng);
-      var bearing = setup.geo.bearing(v.current.lat, v.current.lng, p.lat, p.lng);
-      var relative = v.heading == null ? bearing : setup.geo.normalize(bearing - v.heading);
-      var threshold = Number.isFinite(p.facing) ? p.facing : v.headingThreshold;
+      var distance   = setup.geo.distance(v.current.lat, v.current.lng, p.lat, p.lng);
+      var bearing    = setup.geo.bearing(v.current.lat, v.current.lng, p.lat, p.lng);
+      var relative   = v.heading == null ? bearing : setup.geo.normalize(bearing - v.heading);
+      var threshold  = Number.isFinite(p.facing) ? p.facing : v.headingThreshold;
       var facingDelta = v.heading == null ? 0 : setup.geo.angleDelta(v.heading, bearing);
-      var facingOk = v.heading == null ? true : facingDelta <= threshold;
-
+      var facingOk   = v.heading == null ? true : facingDelta <= threshold;
       return Object.assign({}, p, {
-        distance: distance,
-        bearing: bearing,
-        relative: relative,
-        threshold: threshold,
-        facingDelta: facingDelta,
-        facingOk: facingOk
+        distance: distance, bearing: bearing,
+        relative: relative, threshold: threshold,
+        facingDelta: facingDelta, facingOk: facingOk
       });
     })
-    .filter(function (p) {
-      return p.facingOk;
-    })
-    .sort(function (a, b) {
-      return a.distance - b.distance;
-    });
+    .filter(function (p) { return p.facingOk; })
+    .sort(function (a, b) { return a.distance - b.distance; });
 };
 
 setup.geo.getShownPassage = function () {
   var v = State.variables.geo;
-
-  if (!v.displayed || !Story.has(v.displayed)) {
-    return null;
-  }
-
+  if (!v.displayed || !Story.has(v.displayed)) { return null; }
   return setup.geo.getParsedPassageByName(v.displayed);
 };
 
+// ── Render passage (including image and audio) ────────────────────────────
 setup.geo.renderPassage = function () {
-  var titleEl = document.getElementById("passageTitle");
-  var ledeEl = document.getElementById("passageLede");
-  var bodyEl = document.getElementById("passageBody");
-  var coordEl = document.getElementById("coordLabel");
-  var headingEl = document.getElementById("headingLabel");
-  var modeEl = document.getElementById("modeLabel");
-  var statusEl = document.getElementById("statusText");
-  var displayEl = document.getElementById("displayLabel");
-  var v = State.variables.geo;
-  var dwell = setup.geo.getDwellProgress();
-  var shown = setup.geo.getShownPassage();
+  var titleEl    = document.getElementById('passageTitle');
+  var ledeEl     = document.getElementById('passageLede');
+  var bodyEl     = document.getElementById('passageBody');
+  var coordEl    = document.getElementById('coordLabel');
+  var headingEl  = document.getElementById('headingLabel');
+  var modeEl     = document.getElementById('modeLabel');
+  var statusEl   = document.getElementById('statusText');
+  var displayEl  = document.getElementById('displayLabel');
+  var imageWrap  = document.getElementById('passageImageWrap');
+  var imageEl    = document.getElementById('passageImage');
+  var audioWrap  = document.getElementById('passageAudioWrap');
+  var audioEl    = document.getElementById('passageAudio');
+  var v          = State.variables.geo;
+  var dwell      = setup.geo.getDwellProgress();
+  var shown      = setup.geo.getShownPassage();
 
   if (coordEl) {
     coordEl.textContent = v.current
-      ? v.current.lat.toFixed(5) + ", " + v.current.lng.toFixed(5)
-      : "No coordinates yet";
+      ? v.current.lat.toFixed(5) + ', ' + v.current.lng.toFixed(5)
+      : 'No coordinates yet';
   }
-
   if (headingEl) {
     headingEl.textContent = v.heading == null
-      ? "Heading unavailable"
-      : Math.round(v.heading) + " degrees";
+      ? 'Heading unavailable'
+      : Math.round(v.heading) + ' degrees';
   }
+  if (modeEl)    { modeEl.textContent    = v.mode; }
+  if (displayEl) { displayEl.textContent = v.displayed || 'None'; }
 
-  if (modeEl) {
-    modeEl.textContent = v.mode;
-  }
-
-  if (displayEl) {
-    displayEl.textContent = v.displayed || "None";
-  }
+  // Helper to set image
+  var setMedia = function (passage) {
+    if (imageWrap && imageEl) {
+      if (passage && passage.image) {
+        imageEl.src = 'media/' + passage.image;
+        imageEl.alt = passage.name;
+        imageWrap.style.display = '';
+      } else {
+        imageWrap.style.display = 'none';
+        imageEl.src = '';
+      }
+    }
+    if (audioWrap && audioEl) {
+      var newSrc = passage && passage.audio ? 'media/' + passage.audio : '';
+      if (audioEl.getAttribute('src') !== newSrc) {
+        audioEl.pause();
+        if (newSrc) {
+          audioEl.src = newSrc;
+          audioWrap.style.display = '';
+        } else {
+          audioEl.removeAttribute('src');
+          audioWrap.style.display = 'none';
+        }
+      }
+    }
+  };
 
   if (v.error) {
-    if (statusEl) {
-      statusEl.textContent = v.error;
-    }
+    if (statusEl) { statusEl.textContent = v.error; }
+    setMedia(null);
     return;
   }
 
   if (dwell && (!v.active || v.active.name !== dwell.name)) {
-    if (titleEl) { titleEl.textContent = "Approaching " + dwell.name; }
-    if (ledeEl) { ledeEl.textContent = "Hold position to resolve the passage."; }
-    if (bodyEl) {
+    if (titleEl)  { titleEl.textContent  = 'Approaching ' + dwell.name; }
+    if (ledeEl)   { ledeEl.textContent   = 'Hold position to resolve the passage.'; }
+    if (bodyEl)   {
       bodyEl.textContent =
-        "Dwell progress: " + Math.round(dwell.pct * 100) + "%\n" +
-        "Remain within range for " + Math.max(0, Math.ceil((dwell.required - dwell.elapsed) / 1000)) + " more seconds.";
+        'Dwell progress: ' + Math.round(dwell.pct * 100) + '%\n' +
+        'Remain within range for ' + Math.max(0, Math.ceil((dwell.required - dwell.elapsed) / 1000)) + ' more seconds.';
     }
-    if (statusEl) {
-      statusEl.textContent = "Candidate passage detected: " + dwell.name + ". Waiting for dwell time.";
-    }
+    if (statusEl) { statusEl.textContent = 'Candidate passage detected: ' + dwell.name + '. Waiting for dwell time.'; }
+    setMedia(null);
     return;
   }
 
   if (!v.active || !shown) {
-    if (titleEl) { titleEl.textContent = "Waiting for a place"; }
-    if (ledeEl) { ledeEl.textContent = "Move into a trigger radius to show a passage."; }
-    if (bodyEl) { bodyEl.textContent = "This page only shows the active rendered passage, with a live compass pointing toward the linked passages."; }
-    if (statusEl) { statusEl.textContent = "Waiting for a valid location."; }
+    if (titleEl)  { titleEl.textContent  = 'Waiting for a place'; }
+    if (ledeEl)   { ledeEl.textContent   = 'Move into a trigger radius to show a passage.'; }
+    if (bodyEl)   { bodyEl.textContent   = 'This page only shows the active rendered passage, with a live compass pointing toward the linked passages.'; }
+    if (statusEl) { statusEl.textContent = 'Waiting for a valid location.'; }
+    setMedia(null);
     return;
   }
 
-  if (titleEl) {
-    titleEl.textContent = shown.name;
-  }
-  if (ledeEl) {
-    ledeEl.textContent = shown.lede || "";
-  }
-  if (bodyEl) {
-    bodyEl.textContent = shown.body || "";
-  }
+  if (titleEl)  { titleEl.textContent  = shown.name; }
+  if (ledeEl)   { ledeEl.textContent   = shown.lede || ''; }
+  if (bodyEl)   { bodyEl.textContent   = shown.body || ''; }
   if (statusEl) {
-    statusEl.textContent = "Active geo node: " + v.active.name + ". Displayed passage: " + shown.name + ".";
+    statusEl.textContent = 'Active geo node: ' + v.active.name + '. Displayed passage: ' + shown.name + '.';
   }
+  setMedia(shown);
 };
 
+// ── Render compass ─────────────────────────────────────────────────────────
+// When no active passage, fall back to showing all geo points linked from
+// the Start passage so authors can see the full map of nodes on load.
 setup.geo.renderCompass = function () {
-  var list = document.getElementById("targets");
-  var compass = document.getElementById("compass");
-  var arrow = document.getElementById("headingArrow");
-  var v = State.variables.geo;
+  var list    = document.getElementById('targets');
+  var compass = document.getElementById('compass');
+  var arrow   = document.getElementById('headingArrow');
+  var v       = State.variables.geo;
 
-  if (!list || !compass || !arrow) {
+  if (!list || !compass || !arrow) { return; }
+
+  list.innerHTML = '';
+  Array.from(compass.querySelectorAll('.marker')).forEach(function (el) { el.remove(); });
+  arrow.style.transform = 'rotate(' + (v.heading == null ? 0 : v.heading) + 'deg)';
+
+  // ── Browse mode: no active passage — show all geo nodes linked from Start ──
+  if (!v.active) {
+    var startTargets = setup.geo.getLinkedTargets('Start');
+    var allPoints    = setup.geo.points();
+    // If Start has explicit links, filter to those; otherwise show everything
+    var browsePoints = startTargets.length > 0
+      ? allPoints.filter(function (p) { return startTargets.indexOf(p.name) !== -1; })
+      : allPoints;
+
+    if (browsePoints.length === 0) {
+      var liNone = document.createElement('li');
+      liNone.className = 'gated';
+      liNone.textContent = 'No geo passages found. Add [[PassageName]] links to Start to list them here.';
+      list.appendChild(liNone);
+      return;
+    }
+
+    browsePoints.forEach(function (p, i) {
+      var li   = document.createElement('li');
+      var link = document.createElement('a');
+      link.href = 'javascript:void(0)';
+      link.textContent = p.name;
+      link.addEventListener('click', function () { Engine.play(p.name); });
+      li.appendChild(link);
+      var coordStr = p.lat.toFixed(5) + ', ' + p.lng.toFixed(5);
+      li.innerHTML += '<br><span style="color:#666;font-size:11px;">' + coordStr + ' · r=' + p.radius + 'm</span>';
+      list.appendChild(li);
+
+      // Show marker dots at fixed positions around compass edge (no bearing without position)
+      var angle  = (i / browsePoints.length) * 360;
+      var marker = document.createElement('div');
+      marker.className = 'marker';
+      marker.style.transform = 'rotate(' + angle + 'deg)';
+      marker.innerHTML = '<div class="line"></div><div class="dot"></div>';
+      compass.appendChild(marker);
+    });
+
+    var liInfo = document.createElement('li');
+    liInfo.className = 'gated';
+    liInfo.style.marginTop = '8px';
+    liInfo.textContent = '— Browse mode. Start GPS to activate proximity.';
+    list.appendChild(liInfo);
     return;
   }
 
-  list.innerHTML = "";
-  Array.from(compass.querySelectorAll(".marker")).forEach(function (el) {
-    el.remove();
-  });
-
-  arrow.style.transform = "rotate(" + (v.heading == null ? 0 : v.heading) + "deg)";
-
-  if (!v.current || !v.active) {
-    return;
-  }
+  // ── Normal mode: active passage, show linked visible targets ──────────────
+  if (!v.current) { return; }
 
   if (v.visible.length === 0) {
-    var liEmpty = document.createElement("li");
-    liEmpty.className = "gated";
-    liEmpty.textContent = "No linked passages currently within heading threshold.";
+    var liEmpty = document.createElement('li');
+    liEmpty.className = 'gated';
+    liEmpty.textContent = 'No linked passages currently within heading threshold.';
     list.appendChild(liEmpty);
     return;
   }
 
   v.visible.forEach(function (p, i) {
-    var li = document.createElement("li");
-    var link = document.createElement("a");
-    link.href = "javascript:void(0)";
+    var li   = document.createElement('li');
+    var link = document.createElement('a');
+    link.href = 'javascript:void(0)';
     link.textContent = p.name;
-    link.addEventListener("click", function () {
-      Engine.play(p.name);
-    });
-
+    link.addEventListener('click', function () { Engine.play(p.name); });
     li.appendChild(link);
-    li.innerHTML += "<br>" + Math.round(p.distance) + " m away<br>Bearing " + Math.round(p.bearing) + "°";
+    li.innerHTML += '<br>' + Math.round(p.distance) + ' m away<br>Bearing ' + Math.round(p.bearing) + '°';
     list.appendChild(li);
 
-    var marker = document.createElement("div");
-    marker.className = "marker" + (i === 0 ? " active" : "");
-    marker.style.transform = "rotate(" + p.relative + "deg)";
+    var marker = document.createElement('div');
+    marker.className = 'marker' + (i === 0 ? ' active' : '');
+    marker.style.transform = 'rotate(' + p.relative + 'deg)';
     marker.innerHTML = '<div class="line"></div><div class="dot"></div>';
     compass.appendChild(marker);
   });
@@ -931,87 +911,64 @@ setup.geo.refresh = function () {
 
 setup.geo.startGeolocation = function () {
   var v = State.variables.geo;
-
   if (!navigator.geolocation) {
-    setup.geo.setMode("Geolocation unsupported");
-    v.error = "This browser does not expose navigator.geolocation.";
+    setup.geo.setMode('Geolocation unsupported');
+    v.error = 'This browser does not expose navigator.geolocation.';
     setup.geo.refresh();
     return;
   }
-
-  v.error = "";
-  setup.geo.setMode("GPS live");
-
-  if (v.watchId !== null) {
-    navigator.geolocation.clearWatch(v.watchId);
-  }
-
+  v.error = '';
+  setup.geo.setMode('GPS live');
+  if (v.watchId !== null) { navigator.geolocation.clearWatch(v.watchId); }
   v.watchId = navigator.geolocation.watchPosition(
     function (pos) {
-      v.current = {
-        lat: pos.coords.latitude,
-        lng: pos.coords.longitude
-      };
+      v.current = { lat: pos.coords.latitude, lng: pos.coords.longitude };
       setup.geo.refresh();
     },
     function (err) {
-      setup.geo.setMode("GPS error");
-      v.error = err.message || "Geolocation error.";
+      setup.geo.setMode('GPS error');
+      v.error = err.message || 'Geolocation error.';
       setup.geo.refresh();
     },
-    {
-      enableHighAccuracy: true,
-      maximumAge: 5000,
-      timeout: 10000
-    }
+    { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
   );
 };
 
 setup.geo.enableOrientation = async function () {
   var v = State.variables.geo;
-
   try {
-    if (typeof DeviceOrientationEvent !== "undefined" &&
-        typeof DeviceOrientationEvent.requestPermission === "function") {
+    if (typeof DeviceOrientationEvent !== 'undefined' &&
+        typeof DeviceOrientationEvent.requestPermission === 'function') {
       var result = await DeviceOrientationEvent.requestPermission();
-      if (result !== "granted") {
-        v.error = "Orientation permission was denied.";
+      if (result !== 'granted') {
+        v.error = 'Orientation permission was denied.';
         setup.geo.refresh();
         return;
       }
     }
-
     if (!setup.geo.orientationBound) {
-      window.addEventListener("deviceorientation", setup.geo.handleOrientation, true);
+      window.addEventListener('deviceorientation', setup.geo.handleOrientation, true);
       setup.geo.orientationBound = true;
     }
-
-    v.error = "";
-    var statusEl = document.getElementById("statusText");
-    if (statusEl) {
-      statusEl.textContent = "Compass heading enabled.";
-    }
-  }
-  catch (err) {
-    v.error = err.message || "Could not enable orientation.";
+    v.error = '';
+    var statusEl = document.getElementById('statusText');
+    if (statusEl) { statusEl.textContent = 'Compass heading enabled.'; }
+  } catch (err) {
+    v.error = err.message || 'Could not enable orientation.';
     setup.geo.refresh();
   }
 };
 
 setup.geo.handleOrientation = function (event) {
   var heading = setup.geo.getHeadingFromEvent(event);
-  if (heading == null) {
-    return;
-  }
-
+  if (heading == null) { return; }
   State.variables.geo.heading = heading;
   setup.geo.refresh();
 };
 
 setup.geo.simulate = function () {
   var v = State.variables.geo;
-  setup.geo.setMode("Simulated walk");
-
+  setup.geo.setMode('Simulated walk');
   var path = [
     { lat: 44.6492, lng: -63.5760, heading: 122 },
     { lat: 44.6488, lng: -63.5752, heading: 115 },
@@ -1020,23 +977,14 @@ setup.geo.simulate = function () {
     { lat: 44.6467, lng: -63.5708, heading: 128 },
     { lat: 44.6464, lng: -63.5699, heading: 96 }
   ];
-
   var i = 0;
   v.current = { lat: path[0].lat, lng: path[0].lng };
   v.heading = path[0].heading;
   setup.geo.refresh();
-
-  if (setup.geo.simTimer) {
-    clearInterval(setup.geo.simTimer);
-  }
-
+  if (setup.geo.simTimer) { clearInterval(setup.geo.simTimer); }
   setup.geo.simTimer = setInterval(function () {
     i += 1;
-    if (i >= path.length) {
-      clearInterval(setup.geo.simTimer);
-      return;
-    }
-
+    if (i >= path.length) { clearInterval(setup.geo.simTimer); return; }
     v.current = { lat: path[i].lat, lng: path[i].lng };
     v.heading = path[i].heading;
     setup.geo.refresh();
@@ -1044,49 +992,29 @@ setup.geo.simulate = function () {
 };
 
 setup.geo.toggleGrayMode = function () {
-  var body = document.body;
   State.variables.geo.gray = !State.variables.geo.gray;
-  body.style.filter = State.variables.geo.gray ? "grayscale(0.15) contrast(1.02)" : "";
+  document.body.style.filter = State.variables.geo.gray ? 'grayscale(0.15) contrast(1.02)' : '';
 };
 
 setup.geo.bindUI = function () {
-  var gpsBtn = document.getElementById("gpsBtn");
-  var orientBtn = document.getElementById("orientBtn");
-  var simBtn = document.getElementById("simBtn");
-  var themeBtn = document.getElementById("themeBtn");
-
-  if (gpsBtn && !gpsBtn.dataset.bound) {
-    gpsBtn.addEventListener("click", setup.geo.startGeolocation);
-    gpsBtn.dataset.bound = "1";
-  }
-
-  if (orientBtn && !orientBtn.dataset.bound) {
-    orientBtn.addEventListener("click", setup.geo.enableOrientation);
-    orientBtn.dataset.bound = "1";
-  }
-
-  if (simBtn && !simBtn.dataset.bound) {
-    simBtn.addEventListener("click", setup.geo.simulate);
-    simBtn.dataset.bound = "1";
-  }
-
-  if (themeBtn && !themeBtn.dataset.bound) {
-    themeBtn.addEventListener("click", setup.geo.toggleGrayMode);
-    themeBtn.dataset.bound = "1";
-  }
+  var ids = { gpsBtn: setup.geo.startGeolocation, orientBtn: setup.geo.enableOrientation,
+              simBtn: setup.geo.simulate, themeBtn: setup.geo.toggleGrayMode };
+  Object.keys(ids).forEach(function (id) {
+    var btn = document.getElementById(id);
+    if (btn && !btn.dataset.bound) {
+      btn.addEventListener('click', ids[id]);
+      btn.dataset.bound = '1';
+    }
+  });
 };
 
 setup.geo.startHeartbeat = function () {
-  if (setup.geo.heartbeat) {
-    return;
-  }
-
-  setup.geo.heartbeat = setInterval(function () {
-    setup.geo.refresh();
-  }, 1000);
+  if (setup.geo.heartbeat) { return; }
+  setup.geo.heartbeat = setInterval(function () { setup.geo.refresh(); }, 1000);
 };
 
-$(document).on(":passagerender", function () {
+$(document).on(':passagerender', function () {
+  setup.geo.injectAppMeta();
   setup.geo.bindUI();
   setup.geo.startHeartbeat();
   setup.geo.refresh();
@@ -1096,7 +1024,22 @@ $(document).on(":passagerender", function () {
 
 You are standing inside a geolocated SugarCube story.
 
-The body text is controlled by the nearest resolved geo passage. Links below are hidden routing rules for the compass.
+The body text is controlled by the nearest resolved geo passage. Links below connect geo nodes to this Start passage — they appear in the compass panel on load so you can see all your nodes before starting GPS.
+
+[[FerryTerminal]]
+[[ClockTower]]
+[[Waterline]]
+[[Resolutes Club]]
+[[Irving]]
+[[citadel1]]
+[[radstorm]]
+[[Oteasare_Gorghe_vessesscen]]
+[[G8_WorldTradeCentre]]
+[[G8_GrandParade]]
+[[G8_Commons]]
+[[G8_Harbourfront]]
+[[G8_CitadelLookout]]
+[[G8_RoutePoint]]
 
 :: FerryTerminal [geo harbour]
 @geo 44.648800,-63.575200,45
