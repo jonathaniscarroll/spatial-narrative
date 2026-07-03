@@ -1,5 +1,5 @@
 :: StoryTitle
-Geolocated SugarCube Example
+Geo Passage Navigator Core
 
 :: StoryData
 {
@@ -13,9 +13,13 @@ Geolocated SugarCube Example
 <<set $geo to {
   watchId: null,
   current: null,
+  heading: null,
+  active: null,
   visible: [],
   unlocked: [],
-  error: ""
+  error: "",
+  mode: "Idle",
+  gray: false
 }>>
 
 :: StoryInterface
@@ -30,35 +34,54 @@ Geolocated SugarCube Example
   <div class="menubar">File &nbsp; Edit &nbsp; View &nbsp; Go &nbsp; Bookmarks &nbsp; Options &nbsp; Directory &nbsp; Help</div>
 
   <div class="toolbar">
-    <button id="geo-start" class="button95">Start Geolocation</button>
-    <button id="geo-stop" class="button95">Stop Geolocation</button>
+    <button class="button95" id="gpsBtn">Start Geolocation</button>
+    <button class="button95" id="orientBtn">Enable Compass</button>
+    <button class="button95" id="simBtn">Simulate Walk</button>
+    <button class="button95" id="themeBtn">Gray Mode</button>
   </div>
 
   <div class="layout">
     <div class="marquee-box">
-      <marquee behavior="scroll" direction="left">
-        LIVE STORY PASSAGE VIEWER :: ACTIVE PASSAGE OPENS BY PROXIMITY :: COMPASS POINTS TO LINKED NODES
-      </marquee>
+      <marquee behavior="scroll" direction="left">LIVE STORY PASSAGE VIEWER :: ACTIVE PASSAGE OPENS BY PROXIMITY :: COMPASS POINTS TO LINKED NODES :: BEST VIEWED ON A SECURE MOBILE BROWSER</marquee>
     </div>
 
     <table class="core">
       <tr>
         <td width="62%">
-          <div id="passages"></div>
+          <div class="passage-title" id="passageTitle">Waiting for a place</div>
+          <div class="lede" id="passageLede">Move into a trigger radius to show a passage.</div>
+          <div class="meta">
+            <strong>POSITION:</strong> <span id="coordLabel">No coordinates yet</span><br>
+            <strong>HEADING:</strong> <span id="headingLabel">Heading unavailable</span><br>
+            <strong>MODE:</strong> <span id="modeLabel">Idle</span>
+          </div>
+          <div class="bodycopy" id="passageBody">This page only shows the active rendered passage, with a live compass pointing toward the linked passages.</div>
+          <div id="passages" style="display:none;"></div>
         </td>
         <td width="38%">
-          <div class="panel-title">COMPASS</div>
+          <div class="panel-title">COMPASS TO LINKED PASSAGES</div>
           <div class="compass-box">
-            <div id="geo-panel"></div>
+            <div class="compass" id="compass">
+              <div class="ring"></div>
+              <div class="north">N</div>
+              <div class="heading-arrow" id="headingArrow"></div>
+              <div class="center-dot"></div>
+            </div>
+            <ol class="target-list" id="targets"></ol>
           </div>
         </td>
       </tr>
     </table>
   </div>
+
+  <div class="statusbar">
+    <div id="statusText">Geolocation and orientation both require secure context permissions.</div>
+    <div>Done</div>
+  </div>
 </div>
 
 :: Story Stylesheet [stylesheet]
-html, body {
+body {
   margin: 0;
   background: #c0c0c0;
   color: #000000;
@@ -66,16 +89,14 @@ html, body {
   font-size: 16px;
 }
 
+a { color: #0000cc; }
+
 #ui-bar {
   display: none;
 }
 
 #story {
   margin: 0;
-}
-
-a {
-  color: #0000cc;
 }
 
 .window {
@@ -98,12 +119,12 @@ a {
   align-items: center;
 }
 
-.buttons {
+.titlebar .buttons {
   display: flex;
   gap: 4px;
 }
 
-.box {
+.titlebar .box {
   width: 14px;
   height: 14px;
   background: #d4d0c8;
@@ -113,13 +134,17 @@ a {
   border-bottom: 2px solid #404040;
 }
 
-.menubar, .toolbar {
+.menubar, .toolbar, .statusbar {
   font-family: Arial, Helvetica, sans-serif;
   font-size: 13px;
   background: #d4d0c8;
   border-top: 1px solid #ffffff;
   border-bottom: 1px solid #808080;
   padding: 5px 8px;
+}
+
+.toolbar button {
+  margin: 2px 3px 2px 0;
 }
 
 .layout {
@@ -139,6 +164,35 @@ table.core td {
   padding: 10px;
 }
 
+.passage-title {
+  font-size: 32px;
+  font-weight: bold;
+  margin: 0 0 10px 0;
+  color: #000080;
+}
+
+.lede {
+  margin: 0 0 10px 0;
+  color: #333333;
+  font-style: italic;
+}
+
+.bodycopy {
+  font-size: 20px;
+  line-height: 1.45;
+  margin-bottom: 16px;
+  white-space: pre-wrap;
+}
+
+.meta {
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 12px;
+  background: #ffffe1;
+  border: 1px solid #808080;
+  padding: 6px;
+  margin-bottom: 12px;
+}
+
 .panel-title {
   font-family: Arial, Helvetica, sans-serif;
   font-size: 13px;
@@ -153,16 +207,116 @@ table.core td {
   background: #f0f0f0;
   border: 2px groove #c0c0c0;
   padding: 10px;
-  min-height: 220px;
+  text-align: center;
 }
 
-.marquee-box {
+.compass {
+  position: relative;
+  width: 220px;
+  height: 220px;
+  margin: 0 auto 10px auto;
+  border: 2px solid #000;
+  border-radius: 50%;
+  background: #ffffff;
+}
+
+.compass .ring {
+  position: absolute;
+  inset: 18px;
+  border: 1px dashed #808080;
+  border-radius: 50%;
+}
+
+.north {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  transform: translateX(-50%);
   font-family: Arial, Helvetica, sans-serif;
-  font-size: 12px;
-  background: #ffffe1;
-  border: 1px solid #808080;
-  padding: 4px;
-  margin-bottom: 10px;
+  font-size: 13px;
+  font-weight: bold;
+  color: #cc0000;
+}
+
+.center-dot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  margin-left: -6px;
+  margin-top: -6px;
+  background: #000;
+  border-radius: 50%;
+}
+
+.heading-arrow {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 4px;
+  height: 82px;
+  margin-left: -2px;
+  margin-top: -82px;
+  background: #cc0000;
+  transform-origin: 50% 82px;
+}
+
+.heading-arrow:before {
+  content: "";
+  position: absolute;
+  left: -7px;
+  top: -12px;
+  width: 0;
+  height: 0;
+  border-left: 9px solid transparent;
+  border-right: 9px solid transparent;
+  border-bottom: 14px solid #cc0000;
+}
+
+.marker {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+  transform-origin: 0 0;
+}
+
+.marker .line {
+  position: absolute;
+  left: -1px;
+  top: -72px;
+  width: 2px;
+  height: 62px;
+  background: #000080;
+}
+
+.marker .dot {
+  position: absolute;
+  left: -6px;
+  top: -82px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #000080;
+  border: 1px solid #000;
+}
+
+.marker.active .dot {
+  background: #ff9900;
+}
+
+.target-list {
+  margin: 0;
+  padding-left: 20px;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 13px;
+  text-align: left;
+}
+
+.target-list li {
+  margin-bottom: 8px;
 }
 
 .button95 {
@@ -177,7 +331,6 @@ table.core td {
   padding: 4px 10px;
   min-height: 30px;
   cursor: pointer;
-  margin-right: 6px;
 }
 
 .button95:active {
@@ -187,28 +340,19 @@ table.core td {
   border-bottom: 2px solid #ffffff;
 }
 
-.target-list {
-  margin: 0;
-  padding-left: 20px;
+.marquee-box {
   font-family: Arial, Helvetica, sans-serif;
-  font-size: 13px;
+  font-size: 12px;
+  background: #ffffe1;
+  border: 1px solid #808080;
+  padding: 4px;
+  margin-bottom: 10px;
 }
 
-.target-list li {
-  margin-bottom: 8px;
-}
-
-#geo-panel p {
-  margin-top: 0;
-}
-
-.passage {
-  font-size: 20px;
-  line-height: 1.45;
-}
-
-.passage a {
-  font-family: Arial, Helvetica, sans-serif;
+.statusbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
 }
 
 .nav-hidden {
@@ -216,12 +360,22 @@ table.core td {
 }
 
 @media (max-width: 760px) {
-  table.core,
-  table.core tbody,
-  table.core tr,
-  table.core td {
+  table.core, table.core tbody, table.core tr, table.core td {
     display: block;
     width: 100%;
+  }
+
+  .passage-title {
+    font-size: 26px;
+  }
+
+  .bodycopy {
+    font-size: 18px;
+  }
+
+  .compass {
+    width: 200px;
+    height: 200px;
   }
 }
 
@@ -229,21 +383,33 @@ table.core td {
 window.setup = window.setup || {};
 setup.geo = setup.geo || {};
 
+setup.geo.normalize = function (deg) {
+  return (deg % 360 + 360) % 360;
+};
+
+setup.geo.setMode = function (mode) {
+  State.variables.geo.mode = mode;
+  var el = document.getElementById("modeLabel");
+  if (el) {
+    el.textContent = mode;
+  }
+};
+
 setup.geo.parse = function (passageText) {
-  const lines = passageText.split(/\n/);
-  const meta = {
+  var lines = passageText.split(/\n/);
+  var meta = {
     lat: null,
     lng: null,
     radius: 30,
     lede: ""
   };
-  const body = [];
+  var body = [];
 
   lines.forEach(function (line) {
-    const trimmed = line.trim();
+    var trimmed = line.trim();
 
     if (trimmed.indexOf("@geo ") === 0) {
-      const parts = trimmed.slice(5).split(",").map(function (v) {
+      var parts = trimmed.slice(5).split(",").map(function (v) {
         return Number(v.trim());
       });
       meta.lat = parts[0];
@@ -252,6 +418,8 @@ setup.geo.parse = function (passageText) {
     }
     else if (trimmed.indexOf("@lede ") === 0) {
       meta.lede = trimmed.slice(6).trim();
+    }
+    else if (trimmed.indexOf("<span class=\"nav-hidden\">") === 0) {
     }
     else {
       body.push(line);
@@ -263,12 +431,12 @@ setup.geo.parse = function (passageText) {
 };
 
 setup.geo.distance = function (aLat, aLng, bLat, bLng) {
-  const R = 6371000;
-  const toRad = function (d) { return d * Math.PI / 180; };
-  const dLat = toRad(bLat - aLat);
-  const dLng = toRad(bLng - aLng);
+  var R = 6371000;
+  var toRad = function (d) { return d * Math.PI / 180; };
+  var dLat = toRad(bLat - aLat);
+  var dLng = toRad(bLng - aLng);
 
-  const q =
+  var q =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) *
     Math.sin(dLng / 2) * Math.sin(dLng / 2);
@@ -276,10 +444,35 @@ setup.geo.distance = function (aLat, aLng, bLat, bLng) {
   return 2 * R * Math.atan2(Math.sqrt(q), Math.sqrt(1 - q));
 };
 
+setup.geo.bearing = function (aLat, aLng, bLat, bLng) {
+  var toRad = function (d) { return d * Math.PI / 180; };
+  var toDeg = function (r) { return r * 180 / Math.PI; };
+  var phi1 = toRad(aLat);
+  var phi2 = toRad(bLat);
+  var lambda1 = toRad(aLng);
+  var lambda2 = toRad(bLng);
+
+  var y = Math.sin(lambda2 - lambda1) * Math.cos(phi2);
+  var x = Math.cos(phi1) * Math.sin(phi2) -
+    Math.sin(phi1) * Math.cos(phi2) * Math.cos(lambda2 - lambda1);
+
+  return setup.geo.normalize(toDeg(Math.atan2(y, x)));
+};
+
+setup.geo.getHeadingFromEvent = function (event) {
+  if (typeof event.webkitCompassHeading === "number") {
+    return event.webkitCompassHeading;
+  }
+  if (typeof event.alpha === "number") {
+    return setup.geo.normalize(360 - event.alpha);
+  }
+  return null;
+};
+
 setup.geo.points = function () {
   return Story.lookup("tags", "geo")
     .map(function (p) {
-      const parsed = setup.geo.parse(p.text);
+      var parsed = setup.geo.parse(p.text);
       return {
         name: p.title,
         tags: p.tags,
@@ -300,17 +493,17 @@ setup.geo.getLinkedTargets = function (passageName) {
     return [];
   }
 
-  const text = Story.get(passageName).text;
-  const targets = new Set();
-  const chunks = text.split("[[");
+  var text = Story.get(passageName).text;
+  var targets = new Set();
+  var chunks = text.split("[[");
 
   chunks.slice(1).forEach(function (chunk) {
-    const end = chunk.indexOf("]]");
+    var end = chunk.indexOf("]]");
     if (end === -1) {
       return;
     }
 
-    const raw = chunk.slice(0, end).trim();
+    var raw = chunk.slice(0, end).trim();
 
     if (raw.indexOf("->") !== -1) {
       targets.add(raw.split("->")[1].trim());
@@ -329,52 +522,200 @@ setup.geo.getLinkedTargets = function (passageName) {
   return Array.from(targets);
 };
 
-setup.geo.currentLinks = function () {
-  return setup.geo.getLinkedTargets(passage());
-};
+setup.geo.chooseActivePassage = function () {
+  var v = State.variables.geo;
+  if (!v.current) {
+    return null;
+  }
 
-setup.geo.evaluate = function (lat, lng) {
-  const v = State.variables;
-  const linked = setup.geo.currentLinks();
+  var ranked = setup.geo.points()
+    .map(function (p) {
+      return Object.assign({}, p, {
+        distance: setup.geo.distance(v.current.lat, v.current.lng, p.lat, p.lng)
+      });
+    })
+    .sort(function (a, b) {
+      return a.distance - b.distance;
+    });
 
-  v.geo.current = { lat: lat, lng: lng };
-  v.geo.error = "";
-
-  v.geo.visible = setup.geo.points().filter(function (p) {
-    const inRange = setup.geo.distance(lat, lng, p.lat, p.lng) <= p.radius;
-    const linkedHere = linked.indexOf(p.name) !== -1;
-    return inRange && linkedHere;
+  var inside = ranked.filter(function (p) {
+    return p.distance <= p.radius;
   });
 
-  v.geo.visible.forEach(function (p) {
-    if (v.geo.unlocked.indexOf(p.name) === -1) {
-      v.geo.unlocked.push(p.name);
-    }
-  });
-
-  setup.geo.renderPanel();
+  return inside[0] || ranked[0] || null;
 };
 
-setup.geo.start = function () {
-  const v = State.variables;
+setup.geo.refreshVisible = function () {
+  var v = State.variables.geo;
+  var currentPassage = passage();
+  var linked = setup.geo.getLinkedTargets(currentPassage);
 
-  if (!navigator.geolocation) {
-    v.geo.error = "Geolocation is unavailable in this browser.";
-    setup.geo.renderPanel();
+  if (!v.current) {
+    v.visible = [];
     return;
   }
 
-  if (v.geo.watchId !== null) {
-    navigator.geolocation.clearWatch(v.geo.watchId);
+  v.visible = setup.geo.points()
+    .filter(function (p) {
+      if (v.active && p.name === v.active.name) {
+        return false;
+      }
+      var inRange = setup.geo.distance(v.current.lat, v.current.lng, p.lat, p.lng) <= p.radius;
+      var linkedHere = linked.indexOf(p.name) !== -1;
+      return inRange && linkedHere;
+    })
+    .map(function (p) {
+      var distance = setup.geo.distance(v.current.lat, v.current.lng, p.lat, p.lng);
+      var bearing = setup.geo.bearing(v.current.lat, v.current.lng, p.lat, p.lng);
+      var relative = v.heading == null ? bearing : setup.geo.normalize(bearing - v.heading);
+      return Object.assign({}, p, {
+        distance: distance,
+        bearing: bearing,
+        relative: relative
+      });
+    })
+    .sort(function (a, b) {
+      return a.distance - b.distance;
+    });
+
+  v.visible.forEach(function (p) {
+    if (v.unlocked.indexOf(p.name) === -1) {
+      v.unlocked.push(p.name);
+    }
+  });
+};
+
+setup.geo.renderPassage = function () {
+  var titleEl = document.getElementById("passageTitle");
+  var ledeEl = document.getElementById("passageLede");
+  var bodyEl = document.getElementById("passageBody");
+  var coordEl = document.getElementById("coordLabel");
+  var headingEl = document.getElementById("headingLabel");
+  var modeEl = document.getElementById("modeLabel");
+  var statusEl = document.getElementById("statusText");
+  var v = State.variables.geo;
+
+  if (coordEl) {
+    coordEl.textContent = v.current
+      ? v.current.lat.toFixed(5) + ", " + v.current.lng.toFixed(5)
+      : "No coordinates yet";
   }
 
-  v.geo.watchId = navigator.geolocation.watchPosition(
+  if (headingEl) {
+    headingEl.textContent = v.heading == null
+      ? "Heading unavailable"
+      : Math.round(v.heading) + " degrees";
+  }
+
+  if (modeEl) {
+    modeEl.textContent = v.mode;
+  }
+
+  if (!v.active) {
+    if (titleEl) { titleEl.textContent = "Waiting for a place"; }
+    if (ledeEl) { ledeEl.textContent = "Move into a trigger radius to show a passage."; }
+    if (bodyEl) { bodyEl.textContent = "This page only shows the active rendered passage, with a live compass pointing toward the linked passages."; }
+    if (statusEl) { statusEl.textContent = "Waiting for a valid location."; }
+    return;
+  }
+
+  if (titleEl) {
+    titleEl.textContent = v.active.name;
+  }
+  if (ledeEl) {
+    ledeEl.textContent = v.active.lede || "";
+  }
+  if (bodyEl) {
+    bodyEl.textContent = v.active.body || "";
+  }
+  if (statusEl) {
+    statusEl.textContent = "Active passage: " + v.active.name + ". Compass points toward linked passages in range.";
+  }
+
+  if (v.error && statusEl) {
+    statusEl.textContent = v.error;
+  }
+};
+
+setup.geo.renderCompass = function () {
+  var list = document.getElementById("targets");
+  var compass = document.getElementById("compass");
+  var arrow = document.getElementById("headingArrow");
+  var v = State.variables.geo;
+
+  if (!list || !compass || !arrow) {
+    return;
+  }
+
+  list.innerHTML = "";
+  Array.from(compass.querySelectorAll(".marker")).forEach(function (el) {
+    el.remove();
+  });
+
+  arrow.style.transform = "rotate(" + (v.heading == null ? 0 : v.heading) + "deg)";
+
+  if (!v.current || !v.active) {
+    return;
+  }
+
+  v.visible.forEach(function (p, i) {
+    var li = document.createElement("li");
+    var link = document.createElement("a");
+    link.href = "javascript:void(0)";
+    link.textContent = p.name;
+    link.addEventListener("click", function () {
+      Engine.play(p.name);
+    });
+
+    li.appendChild(link);
+    li.innerHTML += "<br>" + Math.round(p.distance) + " m away<br>Bearing " + Math.round(p.bearing) + "°";
+    list.appendChild(li);
+
+    var marker = document.createElement("div");
+    marker.className = "marker" + (i === 0 ? " active" : "");
+    marker.style.transform = "rotate(" + p.relative + "deg)";
+    marker.innerHTML = '<div class="line"></div><div class="dot"></div>';
+    compass.appendChild(marker);
+  });
+};
+
+setup.geo.refresh = function () {
+  var v = State.variables.geo;
+  v.active = setup.geo.chooseActivePassage();
+  setup.geo.refreshVisible();
+  setup.geo.renderPassage();
+  setup.geo.renderCompass();
+};
+
+setup.geo.startGeolocation = function () {
+  var v = State.variables.geo;
+
+  if (!navigator.geolocation) {
+    setup.geo.setMode("Geolocation unsupported");
+    v.error = "This browser does not expose navigator.geolocation.";
+    setup.geo.refresh();
+    return;
+  }
+
+  v.error = "";
+  setup.geo.setMode("GPS live");
+
+  if (v.watchId !== null) {
+    navigator.geolocation.clearWatch(v.watchId);
+  }
+
+  v.watchId = navigator.geolocation.watchPosition(
     function (pos) {
-      setup.geo.evaluate(pos.coords.latitude, pos.coords.longitude);
+      v.current = {
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude
+      };
+      setup.geo.refresh();
     },
     function (err) {
-      v.geo.error = err.message || "Geolocation error.";
-      setup.geo.renderPanel();
+      setup.geo.setMode("GPS error");
+      v.error = err.message || "Geolocation error.";
+      setup.geo.refresh();
     },
     {
       enableHighAccuracy: true,
@@ -384,89 +725,124 @@ setup.geo.start = function () {
   );
 };
 
-setup.geo.stop = function () {
-  const v = State.variables;
+setup.geo.enableOrientation = async function () {
+  var v = State.variables.geo;
 
-  if (v.geo.watchId !== null) {
-    navigator.geolocation.clearWatch(v.geo.watchId);
-    v.geo.watchId = null;
+  try {
+    if (typeof DeviceOrientationEvent !== "undefined" &&
+        typeof DeviceOrientationEvent.requestPermission === "function") {
+      var result = await DeviceOrientationEvent.requestPermission();
+      if (result !== "granted") {
+        v.error = "Orientation permission was denied.";
+        setup.geo.refresh();
+        return;
+      }
+    }
+
+    if (!setup.geo.orientationBound) {
+      window.addEventListener("deviceorientation", setup.geo.handleOrientation, true);
+      setup.geo.orientationBound = true;
+    }
+
+    v.error = "";
+    var statusEl = document.getElementById("statusText");
+    if (statusEl) {
+      statusEl.textContent = "Compass heading enabled.";
+    }
   }
-
-  setup.geo.renderPanel();
+  catch (err) {
+    v.error = err.message || "Could not enable orientation.";
+    setup.geo.refresh();
+  }
 };
 
-setup.geo.formatCoords = function () {
-  const current = State.variables.geo.current;
-
-  if (!current) {
-    return "No coordinates yet.";
-  }
-
-  return current.lat.toFixed(6) + ", " + current.lng.toFixed(6);
-};
-
-setup.geo.renderPanel = function () {
-  const panel = document.getElementById("geo-panel");
-  if (!panel) {
+setup.geo.handleOrientation = function (event) {
+  var heading = setup.geo.getHeadingFromEvent(event);
+  if (heading == null) {
     return;
   }
 
-  const v = State.variables;
-  let html = "<p><strong>Current coordinates:</strong> " + setup.geo.formatCoords() + "</p>";
+  State.variables.geo.heading = heading;
+  setup.geo.refresh();
+};
 
-  if (v.geo.error) {
-    html += "<p><strong>Error:</strong> " + v.geo.error + "</p>";
+setup.geo.simulate = function () {
+  var v = State.variables.geo;
+  setup.geo.setMode("Simulated walk");
+
+  var path = [
+    { lat: 44.6492, lng: -63.5760, heading: 122 },
+    { lat: 44.6488, lng: -63.5752, heading: 115 },
+    { lat: 44.6478, lng: -63.5735, heading: 108 },
+    { lat: 44.6476, lng: -63.5728, heading: 180 },
+    { lat: 44.6467, lng: -63.5708, heading: 128 },
+    { lat: 44.6464, lng: -63.5699, heading: 96 }
+  ];
+
+  var i = 0;
+  v.current = { lat: path[0].lat, lng: path[0].lng };
+  v.heading = path[0].heading;
+  setup.geo.refresh();
+
+  if (setup.geo.simTimer) {
+    clearInterval(setup.geo.simTimer);
   }
 
-  if (v.geo.visible && v.geo.visible.length > 0) {
-    html += '<ul class="target-list">';
-    v.geo.visible.forEach(function (p) {
-      html += '<li><a href="javascript:void(0)" class="geo-link" data-passage="' + p.name.replace(/"/g, "&quot;") + '">' + p.name + "</a>";
-      if (p.lede) {
-        html += "<br>" + p.lede;
-      }
-      html += "</li>";
-    });
-    html += "</ul>";
-  }
-  else {
-    html += "<p>No linked locations in range.</p>";
+  setup.geo.simTimer = setInterval(function () {
+    i += 1;
+    if (i >= path.length) {
+      clearInterval(setup.geo.simTimer);
+      return;
+    }
+
+    v.current = { lat: path[i].lat, lng: path[i].lng };
+    v.heading = path[i].heading;
+    setup.geo.refresh();
+  }, 1600);
+};
+
+setup.geo.toggleGrayMode = function () {
+  var body = document.body;
+  State.variables.geo.gray = !State.variables.geo.gray;
+  body.style.filter = State.variables.geo.gray ? "grayscale(0.15) contrast(1.02)" : "";
+};
+
+setup.geo.bindUI = function () {
+  var gpsBtn = document.getElementById("gpsBtn");
+  var orientBtn = document.getElementById("orientBtn");
+  var simBtn = document.getElementById("simBtn");
+  var themeBtn = document.getElementById("themeBtn");
+
+  if (gpsBtn && !gpsBtn.dataset.bound) {
+    gpsBtn.addEventListener("click", setup.geo.startGeolocation);
+    gpsBtn.dataset.bound = "1";
   }
 
-  panel.innerHTML = html;
+  if (orientBtn && !orientBtn.dataset.bound) {
+    orientBtn.addEventListener("click", setup.geo.enableOrientation);
+    orientBtn.dataset.bound = "1";
+  }
 
-  Array.from(panel.querySelectorAll(".geo-link")).forEach(function (link) {
-    link.addEventListener("click", function () {
-      Engine.play(this.getAttribute("data-passage"));
-    });
-  });
+  if (simBtn && !simBtn.dataset.bound) {
+    simBtn.addEventListener("click", setup.geo.simulate);
+    simBtn.dataset.bound = "1";
+  }
+
+  if (themeBtn && !themeBtn.dataset.bound) {
+    themeBtn.addEventListener("click", setup.geo.toggleGrayMode);
+    themeBtn.dataset.bound = "1";
+  }
 };
 
 $(document).on(":passagerender", function () {
-  setup.geo.renderPanel();
-
-  const startBtn = document.getElementById("geo-start");
-  const stopBtn = document.getElementById("geo-stop");
-
-  if (startBtn && !startBtn.dataset.bound) {
-    startBtn.addEventListener("click", function () {
-      setup.geo.start();
-    });
-    startBtn.dataset.bound = "1";
-  }
-
-  if (stopBtn && !stopBtn.dataset.bound) {
-    stopBtn.addEventListener("click", function () {
-      setup.geo.stop();
-    });
-    stopBtn.dataset.bound = "1";
-  }
+  setup.geo.bindUI();
+  setup.geo.refresh();
 });
 
 :: Start
 You are standing inside a geolocated SugarCube story.
 
-Choose a linked destination, then physically move into range to make it appear in the compass panel.
+The body text is controlled by the nearest geo passage. Links below are hidden routing rules for the compass.
 
 <span class="nav-hidden">[[FerryTerminal]]</span>
 <span class="nav-hidden">[[ClockTower]]</span>
