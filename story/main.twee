@@ -1236,3 +1236,35 @@ this is radstorm
 @lede Facing into the stormline.
 
 The site sharpens into exposure, charge, and warning.
+
+:: Oteasare_Gorghe_vessesscen [geo]
+@geo 44.636306,-63.572139,12
+@lede Oteasare Gorghe vessesscen.
+@dwell 12000
+@dir 315-45:Oteasare_north
+@dir 46-135:Oteasare_east
+@dir 136-225:Oteasare_south
+@dir 226-314:Oteasare_west
+
+Gorghe vessesscen.
+
+:: Oteasare_north
+@lede Facing north.
+
+North-facing version of the passage.
+
+:: Oteasare_east
+@lede Facing east.
+
+East-facing version of the passage.
+
+:: Oteasare_south
+@lede Facing south.
+
+South-facing version of the passage.
+
+:: Oteasare_west
+@lede Facing west.
+
+West-facing version of the passage.
+
