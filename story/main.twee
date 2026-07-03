@@ -1,7 +1,9 @@
 :: StoryTitle
+
 Geo Passage Navigator Core
 
 :: StoryData
+
 {
   "ifid": "D3E8B7B1-6B47-4A4C-9E65-4B4D2C7A9F10",
   "format": "SugarCube",
@@ -10,6 +12,7 @@ Geo Passage Navigator Core
 }
 
 :: StoryInit
+
 <<set $geo to {
   watchId: null,
   current: null,
@@ -30,6 +33,7 @@ Geo Passage Navigator Core
 }>>
 
 :: StoryInterface
+
 <div class="window">
   <div class="titlebar">
     <div>Geo Passage Navigator Core - Netscape Style</div>
@@ -89,6 +93,7 @@ Geo Passage Navigator Core
 </div>
 
 :: Story Stylesheet [stylesheet]
+
 body {
   margin: 0;
   background: #c0c0c0;
@@ -392,6 +397,7 @@ table.core td {
 }
 
 :: Story JavaScript [script]
+
 window.setup = window.setup || {};
 setup.geo = setup.geo || {};
 
@@ -1093,19 +1099,13 @@ $(document).on(":passagerender", function () {
 });
 
 :: Start
+
 You are standing inside a geolocated SugarCube story.
 
 The body text is controlled by the nearest resolved geo passage. Links below are hidden routing rules for the compass.
 
-<span class="nav-hidden">[[FerryTerminal]]</span>
-<span class="nav-hidden">[[ClockTower]]</span>
-<span class="nav-hidden">[[Waterline]]</span>
-<span class="nav-hidden">[[Resolutes Club]]</span>
-<span class="nav-hidden">[[Irving]]</span>
-<span class="nav-hidden">[[citadel1]]</span>
-
 :: FerryTerminal [geo harbour]
-@geo 44.6488,-63.5752,45
+@geo 44.648800,-63.575200,45
 @lede Low metal hum from the harbour.
 @dwell 12000
 @after 12000
@@ -1116,9 +1116,6 @@ The body text is controlled by the nearest resolved geo passage. Links below are
 @dir 226-314:FerryTerminal_west
 
 You arrive at the edge condition between ticketing, weather, and departure.
-
-<span class="nav-hidden">[[Back to Start->Start]]</span>
-<span class="nav-hidden">[[ClockTower]]</span>
 
 :: FerryTerminal_late
 @lede The terminal settles into duration.
@@ -1146,16 +1143,12 @@ The site contracts into return, enclosure, and procedural delay.
 Metal, water, and older logistics push back through the present interface.
 
 :: ClockTower [geo signal history]
-@geo 44.6476,-63.5728,35
+@geo 44.647600,-63.572800,35
 @lede A vertical metronome.
 @dwell 12000
 @dir 300-60:ClockTower_north
 
 The city keeps time through stone, repetition, and vantage.
-
-<span class="nav-hidden">[[radstorm]]</span>
-<span class="nav-hidden">[[Back to Start->Start]]</span>
-<span class="nav-hidden">[[Waterline]]</span>
 
 :: ClockTower_north
 @lede Facing the upper city.
@@ -1163,13 +1156,11 @@ The city keeps time through stone, repetition, and vantage.
 The clock stops reading as ornament and starts reading as command.
 
 :: Waterline [geo threshold]
-@geo 44.6464,-63.5699,30
+@geo 44.646400,-63.569900,30
 @lede Exposure to wind and open distance.
 @dwell 10000
 
 At the waterline the narrative becomes weather-first.
-
-<span class="nav-hidden">[[Back to Start->Start]]</span>
 
 :: Resolutes Club [geo]
 @geo 44.635722,-63.572139,5
@@ -1183,11 +1174,6 @@ i saw a shiny beacon
 neath the surface of the sea
 it shone a simple sunlight syrup
 resolutely unto me
-
-<span class="nav-hidden">[[radstorm]]</span>
-<span class="nav-hidden">[[Irving]]</span>
-<span class="nav-hidden">[[citadel1]]</span>
-<span class="nav-hidden">[[Back to Start->Start]]</span>
 
 :: ResolutesClub_late
 @lede The site narrows into residue.
@@ -1209,17 +1195,12 @@ and take and take some more
 they think this world is garbage
 and the ground and sky their floor
 
-<span class="nav-hidden">[[Back to Start->Start]]</span>
-<span class="nav-hidden">[[Grainery]]</span>
-
 :: citadel1 [geo]
 @geo 44.647028,-63.578222,30
 @lede First point in the star.
 @dwell 12000
 
 This is the first place in the citadel to go to today.
-
-<span class="nav-hidden">[[Back to Start->Start]]</span>
 
 :: radstorm [geo]
 @geo 44.652917,-63.584667,30
@@ -1229,8 +1210,6 @@ This is the first place in the citadel to go to today.
 @dir 330-30:radstorm_north
 
 this is radstorm
-
-<span class="nav-hidden">[[Back to Start->Start]]</span>
 
 :: radstorm_north
 @lede Facing into the stormline.
@@ -1251,7 +1230,7 @@ Gorghe vessesscen.
 :: Oteasare_north
 @lede Facing north.
 
-North-facing version of the passage.
+North-facing version of the passage. This is north
 
 :: Oteasare_east
 @lede Facing east.
@@ -1267,4 +1246,3 @@ South-facing version of the passage.
 @lede Facing west.
 
 West-facing version of the passage.
-
