@@ -644,12 +644,9 @@ setup.geo.updateActiveByDwell = function () {
   var candidate = setup.geo.chooseCandidatePassage();
 
   if (!candidate) {
+    // Outside all radii — clear candidate tracking but keep active/displayed intact
     v.candidate = null;
     v.candidateSince = null;
-    v.active = null;
-    v.displayed = null;
-    v.displayedBase = null;
-    v.stageSince = null;
     return;
   }
 
@@ -717,9 +714,6 @@ setup.geo.updateDisplayedPassage = function () {
   var v = State.variables.geo;
 
   if (!v.active) {
-    v.displayed = null;
-    v.displayedBase = null;
-    v.stageSince = null;
     return;
   }
 
