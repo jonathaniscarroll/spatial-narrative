@@ -865,6 +865,9 @@ You arrive at the edge condition between ticketing, weather, and departure.
 @lede A vertical metronome.
 
 The city keeps time through stone, repetition, and vantage.
+<span class="nav-hidden">
+[[radstorm]]
+</span>
 
 <span class="nav-hidden">[[Back to Start->Start]]</span>
 <span class="nav-hidden">[[Waterline]]</span>
@@ -881,15 +884,33 @@ At the waterline the narrative becomes weather-first.
 @geo 44.635722,-63.572139,5
 @lede A narrow service edge behind the club.
 
-The alleyway behind the Resolutes Club is dark and foggy, like some sort of archetypal noir side channel.
+i saw a shiny beacon
+neath the surface of the sea
+it shone a simple sunlight syrup
+resolutely unto me
+
+<span class="nav-hidden">
+[[radstorm]]
+</span>
+<span class="nav-hidden">
+[[Irving]]
+</span>
+<span class="nav-hidden">
+[[citadel1]]
+</span>
+
+
 
 <span class="nav-hidden">[[Back to Start->Start]]</span>
 
 :: Irving [geo]
-@geo 44.635278,-63.571000,30
+@geo 44.635278,-63.571000,10
 @lede Refuse, fuel, and back-lot texture.
 
-Behind Irving is a garbage can full of trash.
+the irvings take and take
+and take and take some more
+they think this world is garbage
+and the ground and sky their floor
 
 <span class="nav-hidden">[[Back to Start->Start]]</span>
 
