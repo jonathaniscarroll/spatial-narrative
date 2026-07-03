@@ -1,3 +1,1252 @@
+:: StoryTitle
+
+Geo Passage Navigator Core
+
+:: StoryData
+
+{
+  "ifid": "D3E8B7B1-6B47-4A4C-9E65-4B4D2C7A9F10",
+  "format": "SugarCube",
+  "format-version": "2.36.1",
+  "start": "Start"
+}
+
+:: StoryInit
+
+<<set $geo to {
+  watchId: null,
+  current: null,
+  heading: null,
+  active: null,
+  candidate: null,
+  candidateSince: null,
+  visible: [],
+  unlocked: [],
+  error: "",
+  mode: "Idle",
+  gray: false,
+  dwellMs: 12000,
+  headingThreshold: 35,
+  stageSince: null,
+  displayed: null,
+  displayedBase: null
+}>>
+
+:: StoryInterface
+
+<div class="window">
+  <div class="titlebar">
+    <div>Geo Passage Navigator Core - Netscape Style</div>
+    <div class="buttons">
+      <div class="box"></div><div class="box"></div><div class="box"></div>
+    </div>
+  </div>
+
+  <div class="menubar">File &nbsp; Edit &nbsp; View &nbsp; Go &nbsp; Bookmarks &nbsp; Options &nbsp; Directory &nbsp; Help</div>
+
+  <div class="toolbar">
+    <button class="button95" id="gpsBtn">Start Geolocation</button>
+    <button class="button95" id="orientBtn">Enable Compass</button>
+    <button class="button95" id="simBtn">Simulate Walk</button>
+    <button class="button95" id="themeBtn">Gray Mode</button>
+  </div>
+
+  <div class="layout">
+    <div class="marquee-box">
+      <marquee behavior="scroll" direction="left">LIVE STORY PASSAGE VIEWER :: ACTIVE PASSAGE OPENS BY PROXIMITY :: COMPASS POINTS TO LINKED NODES :: BODY TEXT CAN SHIFT BY DWELL AND DIRECTION :: BEST VIEWED ON A SECURE MOBILE BROWSER</marquee>
+    </div>
+
+    <table class="core">
+      <tr>
+        <td width="62%">
+          <div class="passage-title" id="passageTitle">Waiting for a place</div>
+          <div class="lede" id="passageLede">Move into a trigger radius to show a passage.</div>
+          <div class="meta">
+            <strong>POSITION:</strong> <span id="coordLabel">No coordinates yet</span><br>
+            <strong>HEADING:</strong> <span id="headingLabel">Heading unavailable</span><br>
+            <strong>MODE:</strong> <span id="modeLabel">Idle</span><br>
+            <strong>DISPLAY:</strong> <span id="displayLabel">None</span>
+          </div>
+          <div class="bodycopy" id="passageBody">This page only shows the active rendered passage, with a live compass pointing toward the linked passages.</div>
+          <div id="passages" style="display:none;"></div>
+        </td>
+        <td width="38%">
+          <div class="panel-title">COMPASS TO LINKED PASSAGES</div>
+          <div class="compass-box">
+            <div class="compass" id="compass">
+              <div class="ring"></div>
+              <div class="north">N</div>
+              <div class="heading-arrow" id="headingArrow"></div>
+              <div class="center-dot"></div>
+            </div>
+            <ol class="target-list" id="targets"></ol>
+          </div>
+        </td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="statusbar">
+    <div id="statusText">Geolocation and orientation both require secure context permissions.</div>
+    <div>Done</div>
+  </div>
+</div>
+
+:: Story Stylesheet [stylesheet]
+
+body {
+  margin: 0;
+  background: #c0c0c0;
+  color: #000000;
+  font-family: "Times New Roman", Times, serif;
+  font-size: 16px;
+}
+
+a { color: #0000cc; }
+
+#ui-bar {
+  display: none;
+}
+
+#story {
+  margin: 0;
+}
+
+.window {
+  max-width: 900px;
+  margin: 18px auto;
+  border: 2px solid #000;
+  background: #d4d0c8;
+  box-shadow: 3px 3px 0 #7f7f7f;
+}
+
+.titlebar {
+  background: linear-gradient(90deg, #000080, #1084d0);
+  color: #fff;
+  padding: 6px 8px;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 14px;
+  font-weight: bold;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.titlebar .buttons {
+  display: flex;
+  gap: 4px;
+}
+
+.titlebar .box {
+  width: 14px;
+  height: 14px;
+  background: #d4d0c8;
+  border-top: 2px solid #fff;
+  border-left: 2px solid #fff;
+  border-right: 2px solid #404040;
+  border-bottom: 2px solid #404040;
+}
+
+.menubar, .toolbar, .statusbar {
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 13px;
+  background: #d4d0c8;
+  border-top: 1px solid #ffffff;
+  border-bottom: 1px solid #808080;
+  padding: 5px 8px;
+}
+
+.toolbar button {
+  margin: 2px 3px 2px 0;
+}
+
+.layout {
+  padding: 12px;
+}
+
+table.core {
+  width: 100%;
+  border-collapse: collapse;
+  background: #ffffff;
+  border: 2px inset #c0c0c0;
+}
+
+table.core td {
+  vertical-align: top;
+  border: 1px solid #808080;
+  padding: 10px;
+}
+
+.passage-title {
+  font-size: 32px;
+  font-weight: bold;
+  margin: 0 0 10px 0;
+  color: #000080;
+}
+
+.lede {
+  margin: 0 0 10px 0;
+  color: #333333;
+  font-style: italic;
+}
+
+.bodycopy {
+  font-size: 20px;
+  line-height: 1.45;
+  margin-bottom: 16px;
+  white-space: pre-wrap;
+}
+
+.meta {
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 12px;
+  background: #ffffe1;
+  border: 1px solid #808080;
+  padding: 6px;
+  margin-bottom: 12px;
+}
+
+.panel-title {
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 13px;
+  font-weight: bold;
+  margin-bottom: 8px;
+  background: #000080;
+  color: #ffffff;
+  padding: 4px 6px;
+}
+
+.compass-box {
+  background: #f0f0f0;
+  border: 2px groove #c0c0c0;
+  padding: 10px;
+  text-align: center;
+}
+
+.compass {
+  position: relative;
+  width: 220px;
+  height: 220px;
+  margin: 0 auto 10px auto;
+  border: 2px solid #000;
+  border-radius: 50%;
+  background: #ffffff;
+}
+
+.compass .ring {
+  position: absolute;
+  inset: 18px;
+  border: 1px dashed #808080;
+  border-radius: 50%;
+}
+
+.north {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 13px;
+  font-weight: bold;
+  color: #cc0000;
+}
+
+.center-dot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  margin-left: -6px;
+  margin-top: -6px;
+  background: #000;
+  border-radius: 50%;
+}
+
+.heading-arrow {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 4px;
+  height: 82px;
+  margin-left: -2px;
+  margin-top: -82px;
+  background: #cc0000;
+  transform-origin: 50% 82px;
+}
+
+.heading-arrow:before {
+  content: "";
+  position: absolute;
+  left: -7px;
+  top: -12px;
+  width: 0;
+  height: 0;
+  border-left: 9px solid transparent;
+  border-right: 9px solid transparent;
+  border-bottom: 14px solid #cc0000;
+}
+
+.marker {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+  transform-origin: 0 0;
+}
+
+.marker .line {
+  position: absolute;
+  left: -1px;
+  top: -72px;
+  width: 2px;
+  height: 62px;
+  background: #000080;
+}
+
+.marker .dot {
+  position: absolute;
+  left: -6px;
+  top: -82px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #000080;
+  border: 1px solid #000;
+}
+
+.marker.active .dot {
+  background: #ff9900;
+}
+
+.target-list {
+  margin: 0;
+  padding-left: 20px;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 13px;
+  text-align: left;
+}
+
+.target-list li {
+  margin-bottom: 8px;
+}
+
+.target-list .gated {
+  color: #666666;
+}
+
+.button95 {
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 13px;
+  background: #d4d0c8;
+  color: #000;
+  border-top: 2px solid #ffffff;
+  border-left: 2px solid #ffffff;
+  border-right: 2px solid #404040;
+  border-bottom: 2px solid #404040;
+  padding: 4px 10px;
+  min-height: 30px;
+  cursor: pointer;
+}
+
+.button95:active {
+  border-top: 2px solid #404040;
+  border-left: 2px solid #404040;
+  border-right: 2px solid #ffffff;
+  border-bottom: 2px solid #ffffff;
+}
+
+.marquee-box {
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 12px;
+  background: #ffffe1;
+  border: 1px solid #808080;
+  padding: 4px;
+  margin-bottom: 10px;
+}
+
+.statusbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.nav-hidden {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  table.core, table.core tbody, table.core tr, table.core td {
+    display: block;
+    width: 100%;
+  }
+
+  .passage-title {
+    font-size: 26px;
+  }
+
+  .bodycopy {
+    font-size: 18px;
+  }
+
+  .compass {
+    width: 200px;
+    height: 200px;
+  }
+}
+
+:: Story JavaScript [script]
+
+window.setup = window.setup || {};
+setup.geo = setup.geo || {};
+
+setup.geo.normalize = function (deg) {
+  return (deg % 360 + 360) % 360;
+};
+
+setup.geo.angleDelta = function (a, b) {
+  var d = Math.abs(setup.geo.normalize(a) - setup.geo.normalize(b));
+  return d > 180 ? 360 - d : d;
+};
+
+setup.geo.headingInSector = function (heading, start, end) {
+  heading = setup.geo.normalize(heading);
+  start = setup.geo.normalize(start);
+  end = setup.geo.normalize(end);
+
+  if (start <= end) {
+    return heading >= start && heading <= end;
+  }
+
+  return heading >= start || heading <= end;
+};
+
+setup.geo.setMode = function (mode) {
+  State.variables.geo.mode = mode;
+  var el = document.getElementById("modeLabel");
+  if (el) {
+    el.textContent = mode;
+  }
+};
+
+setup.geo.parse = function (passageText) {
+  var lines = passageText.split(/\n/);
+  var meta = {
+    lat: null,
+    lng: null,
+    radius: 30,
+    lede: "",
+    dwell: null,
+    facing: null,
+    after: null,
+    then: null,
+    dirs: []
+  };
+  var body = [];
+
+  lines.forEach(function (line) {
+    var trimmed = line.trim();
+
+    if (trimmed.indexOf("@geo ") === 0) {
+      var parts = trimmed.slice(5).split(",").map(function (v) {
+        return Number(v.trim());
+      });
+      meta.lat = parts[0];
+      meta.lng = parts[1];
+      meta.radius = Number.isFinite(parts[2]) ? parts[2] : 30;
+    }
+    else if (trimmed.indexOf("@lede ") === 0) {
+      meta.lede = trimmed.slice(6).trim();
+    }
+    else if (trimmed.indexOf("@dwell ") === 0) {
+      meta.dwell = Number(trimmed.slice(7).trim());
+    }
+    else if (trimmed.indexOf("@facing ") === 0) {
+      meta.facing = Number(trimmed.slice(8).trim());
+    }
+    else if (trimmed.indexOf("@after ") === 0) {
+      meta.after = Number(trimmed.slice(7).trim());
+    }
+    else if (trimmed.indexOf("@then ") === 0) {
+      meta.then = trimmed.slice(6).trim();
+    }
+    else if (trimmed.indexOf("@dir ") === 0) {
+      var spec = trimmed.slice(5).trim();
+      var pair = spec.split(":");
+      if (pair.length === 2) {
+        var range = pair[0].split("-");
+        var target = pair[1].trim();
+        var start = Number(range[0]);
+        var end = Number(range[1]);
+        if (Number.isFinite(start) && Number.isFinite(end) && target) {
+          meta.dirs.push({
+            start: start,
+            end: end,
+            target: target
+          });
+        }
+      }
+    }
+    else if (trimmed.indexOf("<span class=\"nav-hidden\">") === 0) {
+    }
+    else {
+      body.push(line);
+    }
+  });
+
+  meta.body = body.join("\n").trim();
+  return meta;
+};
+
+setup.geo.distance = function (aLat, aLng, bLat, bLng) {
+  var R = 6371000;
+  var toRad = function (d) { return d * Math.PI / 180; };
+  var dLat = toRad(bLat - aLat);
+  var dLng = toRad(bLng - aLng);
+
+  var q =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) *
+    Math.sin(dLng / 2) * Math.sin(dLng / 2);
+
+  return 2 * R * Math.atan2(Math.sqrt(q), Math.sqrt(1 - q));
+};
+
+setup.geo.bearing = function (aLat, aLng, bLat, bLng) {
+  var toRad = function (d) { return d * Math.PI / 180; };
+  var toDeg = function (r) { return r * 180 / Math.PI; };
+  var phi1 = toRad(aLat);
+  var phi2 = toRad(bLat);
+  var lambda1 = toRad(aLng);
+  var lambda2 = toRad(bLng);
+
+  var y = Math.sin(lambda2 - lambda1) * Math.cos(phi2);
+  var x = Math.cos(phi1) * Math.sin(phi2) -
+    Math.sin(phi1) * Math.cos(phi2) * Math.cos(lambda2 - lambda1);
+
+  return setup.geo.normalize(toDeg(Math.atan2(y, x)));
+};
+
+setup.geo.getHeadingFromEvent = function (event) {
+  if (typeof event.webkitCompassHeading === "number") {
+    return event.webkitCompassHeading;
+  }
+  if (typeof event.alpha === "number") {
+    return setup.geo.normalize(360 - event.alpha);
+  }
+  return null;
+};
+
+setup.geo.points = function () {
+  return Story.lookup("tags", "geo")
+    .map(function (p) {
+      var parsed = setup.geo.parse(p.text);
+      return {
+        name: p.title,
+        tags: p.tags,
+        lat: parsed.lat,
+        lng: parsed.lng,
+        radius: parsed.radius,
+        lede: parsed.lede,
+        body: parsed.body,
+        dwell: parsed.dwell,
+        facing: parsed.facing,
+        after: parsed.after,
+        then: parsed.then,
+        dirs: parsed.dirs
+      };
+    })
+    .filter(function (p) {
+      return Number.isFinite(p.lat) && Number.isFinite(p.lng);
+    });
+};
+
+setup.geo.getPointByName = function (name) {
+  return setup.geo.points().find(function (p) {
+    return p.name === name;
+  }) || null;
+};
+
+setup.geo.getParsedPassageByName = function (name) {
+  if (!name || !Story.has(name)) {
+    return null;
+  }
+  var parsed = setup.geo.parse(Story.get(name).text);
+  parsed.name = name;
+  return parsed;
+};
+
+setup.geo.getLinkedTargets = function (passageName) {
+  if (!passageName || !Story.has(passageName)) {
+    return [];
+  }
+
+  var text = Story.get(passageName).text;
+  var targets = [];
+  var seen = Object.create(null);
+  var chunks = text.split("[[");
+
+  chunks.slice(1).forEach(function (chunk) {
+    var end = chunk.indexOf("]]");
+    if (end === -1) {
+      return;
+    }
+
+    var raw = chunk.slice(0, end).trim();
+    var target = raw;
+
+    if (raw.indexOf("->") !== -1) {
+      target = raw.split("->")[1].trim();
+    }
+    else if (raw.indexOf("<-") !== -1) {
+      target = raw.split("<-")[0].trim();
+    }
+    else if (raw.indexOf("|") !== -1) {
+      target = raw.split("|")[1].trim();
+    }
+
+    if (!seen[target]) {
+      seen[target] = true;
+      targets.push(target);
+    }
+  });
+
+  return targets;
+};
+
+setup.geo.chooseCandidatePassage = function () {
+  var v = State.variables.geo;
+  if (!v.current) {
+    return null;
+  }
+
+  var ranked = setup.geo.points()
+    .map(function (p) {
+      return Object.assign({}, p, {
+        distance: setup.geo.distance(v.current.lat, v.current.lng, p.lat, p.lng)
+      });
+    })
+    .sort(function (a, b) {
+      return a.distance - b.distance;
+    });
+
+  var inside = ranked.filter(function (p) {
+    return p.distance <= p.radius;
+  });
+
+  return inside[0] || null;
+};
+
+setup.geo.updateActiveByDwell = function () {
+  var v = State.variables.geo;
+  var now = Date.now();
+  var candidate = setup.geo.chooseCandidatePassage();
+
+  if (!candidate) {
+    v.candidate = null;
+    v.candidateSince = null;
+    v.active = null;
+    v.displayed = null;
+    v.displayedBase = null;
+    v.stageSince = null;
+    return;
+  }
+
+  if (!v.candidate || v.candidate.name !== candidate.name) {
+    v.candidate = candidate;
+    v.candidateSince = now;
+    return;
+  }
+
+  v.candidate = candidate;
+
+  var dwellNeeded = Number.isFinite(candidate.dwell) ? candidate.dwell : v.dwellMs;
+  var elapsed = now - v.candidateSince;
+
+  if (!v.active || v.active.name !== candidate.name) {
+    if (elapsed >= dwellNeeded) {
+      v.active = candidate;
+      v.displayedBase = candidate.name;
+      v.displayed = candidate.name;
+      v.stageSince = now;
+      if (v.unlocked.indexOf(candidate.name) === -1) {
+        v.unlocked.push(candidate.name);
+      }
+    }
+  }
+};
+
+setup.geo.getDwellProgress = function () {
+  var v = State.variables.geo;
+
+  if (!v.candidate || !v.candidateSince) {
+    return null;
+  }
+
+  var dwellNeeded = Number.isFinite(v.candidate.dwell) ? v.candidate.dwell : v.dwellMs;
+  var elapsed = Date.now() - v.candidateSince;
+  var pct = Math.max(0, Math.min(1, elapsed / dwellNeeded));
+
+  return {
+    name: v.candidate.name,
+    elapsed: elapsed,
+    required: dwellNeeded,
+    pct: pct
+  };
+};
+
+setup.geo.chooseDirectionalPassage = function (basePassage) {
+  var v = State.variables.geo;
+
+  if (!basePassage || !basePassage.dirs || !basePassage.dirs.length || v.heading == null) {
+    return null;
+  }
+
+  for (var i = 0; i < basePassage.dirs.length; i += 1) {
+    var rule = basePassage.dirs[i];
+    if (setup.geo.headingInSector(v.heading, rule.start, rule.end) && Story.has(rule.target)) {
+      return rule.target;
+    }
+  }
+
+  return null;
+};
+
+setup.geo.updateDisplayedPassage = function () {
+  var v = State.variables.geo;
+
+  if (!v.active) {
+    v.displayed = null;
+    v.displayedBase = null;
+    v.stageSince = null;
+    return;
+  }
+
+  if (v.displayedBase !== v.active.name) {
+    v.displayedBase = v.active.name;
+    v.displayed = v.active.name;
+    v.stageSince = Date.now();
+  }
+
+  var baseName = v.active.name;
+
+  if (Number.isFinite(v.active.after) && v.active.then && Story.has(v.active.then)) {
+    var elapsed = Date.now() - v.stageSince;
+    if (elapsed >= v.active.after) {
+      baseName = v.active.then;
+    }
+  }
+
+  v.displayedBase = baseName;
+
+  var baseParsed = setup.geo.getParsedPassageByName(baseName);
+  var directional = setup.geo.chooseDirectionalPassage(baseParsed);
+
+  v.displayed = directional || baseName;
+};
+
+setup.geo.refreshVisible = function () {
+  var v = State.variables.geo;
+
+  if (!v.current || !v.active) {
+    v.visible = [];
+    return;
+  }
+
+  var linked = setup.geo.getLinkedTargets(v.active.name);
+
+  v.visible = linked
+    .filter(function (name) {
+      return name !== v.active.name && Story.has(name);
+    })
+    .map(function (name) {
+      return setup.geo.getPointByName(name);
+    })
+    .filter(function (p) {
+      return !!p;
+    })
+    .map(function (p) {
+      var distance = setup.geo.distance(v.current.lat, v.current.lng, p.lat, p.lng);
+      var bearing = setup.geo.bearing(v.current.lat, v.current.lng, p.lat, p.lng);
+      var relative = v.heading == null ? bearing : setup.geo.normalize(bearing - v.heading);
+      var threshold = Number.isFinite(p.facing) ? p.facing : v.headingThreshold;
+      var facingDelta = v.heading == null ? 0 : setup.geo.angleDelta(v.heading, bearing);
+      var facingOk = v.heading == null ? true : facingDelta <= threshold;
+
+      return Object.assign({}, p, {
+        distance: distance,
+        bearing: bearing,
+        relative: relative,
+        threshold: threshold,
+        facingDelta: facingDelta,
+        facingOk: facingOk
+      });
+    })
+    .filter(function (p) {
+      return p.facingOk;
+    })
+    .sort(function (a, b) {
+      return a.distance - b.distance;
+    });
+};
+
+setup.geo.getShownPassage = function () {
+  var v = State.variables.geo;
+
+  if (!v.displayed || !Story.has(v.displayed)) {
+    return null;
+  }
+
+  return setup.geo.getParsedPassageByName(v.displayed);
+};
+
+setup.geo.renderPassage = function () {
+  var titleEl = document.getElementById("passageTitle");
+  var ledeEl = document.getElementById("passageLede");
+  var bodyEl = document.getElementById("passageBody");
+  var coordEl = document.getElementById("coordLabel");
+  var headingEl = document.getElementById("headingLabel");
+  var modeEl = document.getElementById("modeLabel");
+  var statusEl = document.getElementById("statusText");
+  var displayEl = document.getElementById("displayLabel");
+  var v = State.variables.geo;
+  var dwell = setup.geo.getDwellProgress();
+  var shown = setup.geo.getShownPassage();
+
+  if (coordEl) {
+    coordEl.textContent = v.current
+      ? v.current.lat.toFixed(5) + ", " + v.current.lng.toFixed(5)
+      : "No coordinates yet";
+  }
+
+  if (headingEl) {
+    headingEl.textContent = v.heading == null
+      ? "Heading unavailable"
+      : Math.round(v.heading) + " degrees";
+  }
+
+  if (modeEl) {
+    modeEl.textContent = v.mode;
+  }
+
+  if (displayEl) {
+    displayEl.textContent = v.displayed || "None";
+  }
+
+  if (v.error) {
+    if (statusEl) {
+      statusEl.textContent = v.error;
+    }
+    return;
+  }
+
+  if (dwell && (!v.active || v.active.name !== dwell.name)) {
+    if (titleEl) { titleEl.textContent = "Approaching " + dwell.name; }
+    if (ledeEl) { ledeEl.textContent = "Hold position to resolve the passage."; }
+    if (bodyEl) {
+      bodyEl.textContent =
+        "Dwell progress: " + Math.round(dwell.pct * 100) + "%\n" +
+        "Remain within range for " + Math.max(0, Math.ceil((dwell.required - dwell.elapsed) / 1000)) + " more seconds.";
+    }
+    if (statusEl) {
+      statusEl.textContent = "Candidate passage detected: " + dwell.name + ". Waiting for dwell time.";
+    }
+    return;
+  }
+
+  if (!v.active || !shown) {
+    if (titleEl) { titleEl.textContent = "Waiting for a place"; }
+    if (ledeEl) { ledeEl.textContent = "Move into a trigger radius to show a passage."; }
+    if (bodyEl) { bodyEl.textContent = "This page only shows the active rendered passage, with a live compass pointing toward the linked passages."; }
+    if (statusEl) { statusEl.textContent = "Waiting for a valid location."; }
+    return;
+  }
+
+  if (titleEl) {
+    titleEl.textContent = shown.name;
+  }
+  if (ledeEl) {
+    ledeEl.textContent = shown.lede || "";
+  }
+  if (bodyEl) {
+    bodyEl.textContent = shown.body || "";
+  }
+  if (statusEl) {
+    statusEl.textContent = "Active geo node: " + v.active.name + ". Displayed passage: " + shown.name + ".";
+  }
+};
+
+setup.geo.renderCompass = function () {
+  var list = document.getElementById("targets");
+  var compass = document.getElementById("compass");
+  var arrow = document.getElementById("headingArrow");
+  var v = State.variables.geo;
+
+  if (!list || !compass || !arrow) {
+    return;
+  }
+
+  list.innerHTML = "";
+  Array.from(compass.querySelectorAll(".marker")).forEach(function (el) {
+    el.remove();
+  });
+
+  arrow.style.transform = "rotate(" + (v.heading == null ? 0 : v.heading) + "deg)";
+
+  if (!v.current || !v.active) {
+    return;
+  }
+
+  if (v.visible.length === 0) {
+    var liEmpty = document.createElement("li");
+    liEmpty.className = "gated";
+    liEmpty.textContent = "No linked passages currently within heading threshold.";
+    list.appendChild(liEmpty);
+    return;
+  }
+
+  v.visible.forEach(function (p, i) {
+    var li = document.createElement("li");
+    var link = document.createElement("a");
+    link.href = "javascript:void(0)";
+    link.textContent = p.name;
+    link.addEventListener("click", function () {
+      Engine.play(p.name);
+    });
+
+    li.appendChild(link);
+    li.innerHTML += "<br>" + Math.round(p.distance) + " m away<br>Bearing " + Math.round(p.bearing) + "°";
+    list.appendChild(li);
+
+    var marker = document.createElement("div");
+    marker.className = "marker" + (i === 0 ? " active" : "");
+    marker.style.transform = "rotate(" + p.relative + "deg)";
+    marker.innerHTML = '<div class="line"></div><div class="dot"></div>';
+    compass.appendChild(marker);
+  });
+};
+
+setup.geo.refresh = function () {
+  setup.geo.updateActiveByDwell();
+  setup.geo.updateDisplayedPassage();
+  setup.geo.refreshVisible();
+  setup.geo.renderPassage();
+  setup.geo.renderCompass();
+};
+
+setup.geo.startGeolocation = function () {
+  var v = State.variables.geo;
+
+  if (!navigator.geolocation) {
+    setup.geo.setMode("Geolocation unsupported");
+    v.error = "This browser does not expose navigator.geolocation.";
+    setup.geo.refresh();
+    return;
+  }
+
+  v.error = "";
+  setup.geo.setMode("GPS live");
+
+  if (v.watchId !== null) {
+    navigator.geolocation.clearWatch(v.watchId);
+  }
+
+  v.watchId = navigator.geolocation.watchPosition(
+    function (pos) {
+      v.current = {
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude
+      };
+      setup.geo.refresh();
+    },
+    function (err) {
+      setup.geo.setMode("GPS error");
+      v.error = err.message || "Geolocation error.";
+      setup.geo.refresh();
+    },
+    {
+      enableHighAccuracy: true,
+      maximumAge: 5000,
+      timeout: 10000
+    }
+  );
+};
+
+setup.geo.enableOrientation = async function () {
+  var v = State.variables.geo;
+
+  try {
+    if (typeof DeviceOrientationEvent !== "undefined" &&
+        typeof DeviceOrientationEvent.requestPermission === "function") {
+      var result = await DeviceOrientationEvent.requestPermission();
+      if (result !== "granted") {
+        v.error = "Orientation permission was denied.";
+        setup.geo.refresh();
+        return;
+      }
+    }
+
+    if (!setup.geo.orientationBound) {
+      window.addEventListener("deviceorientation", setup.geo.handleOrientation, true);
+      setup.geo.orientationBound = true;
+    }
+
+    v.error = "";
+    var statusEl = document.getElementById("statusText");
+    if (statusEl) {
+      statusEl.textContent = "Compass heading enabled.";
+    }
+  }
+  catch (err) {
+    v.error = err.message || "Could not enable orientation.";
+    setup.geo.refresh();
+  }
+};
+
+setup.geo.handleOrientation = function (event) {
+  var heading = setup.geo.getHeadingFromEvent(event);
+  if (heading == null) {
+    return;
+  }
+
+  State.variables.geo.heading = heading;
+  setup.geo.refresh();
+};
+
+setup.geo.simulate = function () {
+  var v = State.variables.geo;
+  setup.geo.setMode("Simulated walk");
+
+  var path = [
+    { lat: 44.6492, lng: -63.5760, heading: 122 },
+    { lat: 44.6488, lng: -63.5752, heading: 115 },
+    { lat: 44.6478, lng: -63.5735, heading: 108 },
+    { lat: 44.6476, lng: -63.5728, heading: 180 },
+    { lat: 44.6467, lng: -63.5708, heading: 128 },
+    { lat: 44.6464, lng: -63.5699, heading: 96 }
+  ];
+
+  var i = 0;
+  v.current = { lat: path[0].lat, lng: path[0].lng };
+  v.heading = path[0].heading;
+  setup.geo.refresh();
+
+  if (setup.geo.simTimer) {
+    clearInterval(setup.geo.simTimer);
+  }
+
+  setup.geo.simTimer = setInterval(function () {
+    i += 1;
+    if (i >= path.length) {
+      clearInterval(setup.geo.simTimer);
+      return;
+    }
+
+    v.current = { lat: path[i].lat, lng: path[i].lng };
+    v.heading = path[i].heading;
+    setup.geo.refresh();
+  }, 1600);
+};
+
+setup.geo.toggleGrayMode = function () {
+  var body = document.body;
+  State.variables.geo.gray = !State.variables.geo.gray;
+  body.style.filter = State.variables.geo.gray ? "grayscale(0.15) contrast(1.02)" : "";
+};
+
+setup.geo.bindUI = function () {
+  var gpsBtn = document.getElementById("gpsBtn");
+  var orientBtn = document.getElementById("orientBtn");
+  var simBtn = document.getElementById("simBtn");
+  var themeBtn = document.getElementById("themeBtn");
+
+  if (gpsBtn && !gpsBtn.dataset.bound) {
+    gpsBtn.addEventListener("click", setup.geo.startGeolocation);
+    gpsBtn.dataset.bound = "1";
+  }
+
+  if (orientBtn && !orientBtn.dataset.bound) {
+    orientBtn.addEventListener("click", setup.geo.enableOrientation);
+    orientBtn.dataset.bound = "1";
+  }
+
+  if (simBtn && !simBtn.dataset.bound) {
+    simBtn.addEventListener("click", setup.geo.simulate);
+    simBtn.dataset.bound = "1";
+  }
+
+  if (themeBtn && !themeBtn.dataset.bound) {
+    themeBtn.addEventListener("click", setup.geo.toggleGrayMode);
+    themeBtn.dataset.bound = "1";
+  }
+};
+
+setup.geo.startHeartbeat = function () {
+  if (setup.geo.heartbeat) {
+    return;
+  }
+
+  setup.geo.heartbeat = setInterval(function () {
+    setup.geo.refresh();
+  }, 1000);
+};
+
+$(document).on(":passagerender", function () {
+  setup.geo.bindUI();
+  setup.geo.startHeartbeat();
+  setup.geo.refresh();
+});
+
+:: Start
+
+You are standing inside a geolocated SugarCube story.
+
+The body text is controlled by the nearest resolved geo passage. Links below are hidden routing rules for the compass.
+
+:: FerryTerminal [geo harbour]
+@geo 44.648800,-63.575200,45
+@lede Low metal hum from the harbour.
+@dwell 12000
+@after 12000
+@then FerryTerminal_late
+@dir 315-45:FerryTerminal_north
+@dir 46-135:FerryTerminal_east
+@dir 136-225:FerryTerminal_south
+@dir 226-314:FerryTerminal_west
+
+You arrive at the edge condition between ticketing, weather, and departure.
+
+:: FerryTerminal_late
+@lede The terminal settles into duration.
+
+The machinery fades into a waiting-system. Time is now the primary architecture.
+
+:: FerryTerminal_north
+@lede Facing north.
+
+The harbour reads as weather, opening, and outward route.
+
+:: FerryTerminal_east
+@lede Facing east.
+
+The terminal becomes infrastructure, ticketing, queue, and edge management.
+
+:: FerryTerminal_south
+@lede Facing south.
+
+The site contracts into return, enclosure, and procedural delay.
+
+:: FerryTerminal_west
+@lede Facing west.
+
+Metal, water, and older logistics push back through the present interface.
+
+:: ClockTower [geo signal history]
+@geo 44.647600,-63.572800,35
+@lede A vertical metronome.
+@dwell 12000
+@dir 300-60:ClockTower_north
+
+The city keeps time through stone, repetition, and vantage.
+
+:: ClockTower_north
+@lede Facing the upper city.
+
+The clock stops reading as ornament and starts reading as command.
+
+:: Waterline [geo threshold]
+@geo 44.646400,-63.569900,30
+@lede Exposure to wind and open distance.
+@dwell 10000
+
+At the waterline the narrative becomes weather-first.
+
+:: Resolutes Club [geo]
+@geo 44.635722,-63.572139,5
+@lede A narrow service edge behind the club.
+@dwell 15000
+@after 10000
+@then ResolutesClub_late
+@dir 80-160:ResolutesClub_east
+
+i saw a shiny beacon
+neath the surface of the sea
+it shone a simple sunlight syrup
+resolutely unto me
+
+:: ResolutesClub_late
+@lede The site narrows into residue.
+
+What first looked like a threshold begins to feel like aftermath.
+
+:: ResolutesClub_east
+@lede Facing east.
+
+The beacon becomes industrial. Reflection gives way to extraction.
+
+:: Irving [geo]
+@geo 44.635278,-63.571000,10
+@lede Refuse, fuel, and back-lot texture.
+@dwell 12000
+
+the irvings take and take
+and take and take some more
+they think this world is garbage
+and the ground and sky their floor
+
+:: citadel1 [geo]
+@geo 44.647028,-63.578222,30
+@lede First point in the star.
+@dwell 12000
+
+This is the first place in the citadel to go to today.
+
+:: radstorm [geo]
+@geo 44.652917,-63.584667,30
+@lede radstorm
+@dwell 20000
+@facing 25
+@dir 330-30:radstorm_north
+
+this is radstorm
+
+:: radstorm_north
+@lede Facing into the stormline.
+
+The site sharpens into exposure, charge, and warning.
+
+:: Oteasare_Gorghe_vessesscen [geo]
+@geo 44.636306,-63.572139,12
+@lede Oteasare Gorghe vessesscen.
+@dwell 12000
+@dir 315-45:Oteasare_north
+@dir 46-135:Oteasare_east
+@dir 136-225:Oteasare_south
+@dir 226-314:Oteasare_west
+
+Gorghe vessesscen.
+
+:: Oteasare_north
+@lede Facing north.
+
+North-facing version of the passage. This is north
+
+:: Oteasare_east
+@lede Facing east.
+
+East-facing version of the passage.
+
+:: Oteasare_south
+@lede Facing south.
+
+South-facing version of the passage.
+
+:: Oteasare_west
+@lede Facing west.
+
+West-facing version of the passage.
+
 :: G8_WorldTradeCentre [geo g8]
 @geo 44.642344,-63.572234,35
 @lede Arrival in the vertical lobby of the summit.
@@ -78,7 +1327,7 @@ Beyond the fence the usual dog walkers trace the edge of the event.
 
 :: G8_Harbourfront [geo g8]
 @geo 44.646000,-63.569500,40
-@lede The summit’s edge condition at the waterline.
+@lede The summit's edge condition at the waterline.
 @dwell 15000
 @dir 315-45:G8_Harbourfront_north
 @dir 225-315:G8_Harbourfront_west
