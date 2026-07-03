@@ -15,11 +15,15 @@ Geo Passage Navigator Core
   current: null,
   heading: null,
   active: null,
+  candidate: null,
+  candidateSince: null,
   visible: [],
   unlocked: [],
   error: "",
   mode: "Idle",
-  gray: false
+  gray: false,
+  dwellMs: 12000,
+  headingThreshold: 35
 }>>
 
 :: StoryInterface
@@ -319,6 +323,10 @@ table.core td {
   margin-bottom: 8px;
 }
 
+.target-list .gated {
+  color: #666666;
+}
+
 .button95 {
   font-family: Arial, Helvetica, sans-serif;
   font-size: 13px;
@@ -387,6 +395,11 @@ setup.geo.normalize = function (deg) {
   return (deg % 360 + 360) % 360;
 };
 
+setup.geo.angleDelta = function (a, b) {
+  var d = Math.abs(setup.geo.normalize(a) - setup.geo.normalize(b));
+  return d > 180 ? 360 - d : d;
+};
+
 setup.geo.setMode = function (mode) {
   State.variables.geo.mode = mode;
   var el = document.getElementById("modeLabel");
@@ -401,7 +414,9 @@ setup.geo.parse = function (passageText) {
     lat: null,
     lng: null,
     radius: 30,
-    lede: ""
+    lede: "",
+    dwell: null,
+    facing: null
   };
   var body = [];
 
@@ -418,6 +433,12 @@ setup.geo.parse = function (passageText) {
     }
     else if (trimmed.indexOf("@lede ") === 0) {
       meta.lede = trimmed.slice(6).trim();
+    }
+    else if (trimmed.indexOf("@dwell ") === 0) {
+      meta.dwell = Number(trimmed.slice(7).trim());
+    }
+    else if (trimmed.indexOf("@facing ") === 0) {
+      meta.facing = Number(trimmed.slice(8).trim());
     }
     else if (trimmed.indexOf("<span class=\"nav-hidden\">") === 0) {
     }
@@ -480,12 +501,20 @@ setup.geo.points = function () {
         lng: parsed.lng,
         radius: parsed.radius,
         lede: parsed.lede,
-        body: parsed.body
+        body: parsed.body,
+        dwell: parsed.dwell,
+        facing: parsed.facing
       };
     })
     .filter(function (p) {
       return Number.isFinite(p.lat) && Number.isFinite(p.lng);
     });
+};
+
+setup.geo.getPointByName = function (name) {
+  return setup.geo.points().find(function (p) {
+    return p.name === name;
+  }) || null;
 };
 
 setup.geo.getLinkedTargets = function (passageName) {
@@ -526,46 +555,7 @@ setup.geo.getLinkedTargets = function (passageName) {
   return targets;
 };
 
-setup.geo.refreshVisible = function () {
-  var v = State.variables.geo;
-
-  if (!v.current || !v.active) {
-    v.visible = [];
-    return;
-  }
-
-  var linked = setup.geo.getLinkedTargets(v.active.name);
-
-  v.visible = linked
-    .filter(function (name) {
-      return name !== v.active.name && Story.has(name);
-    })
-    .map(function (name) {
-      return setup.geo.points().find(function (p) {
-        return p.name === name;
-      });
-    })
-    .filter(function (p) {
-      return !!p;
-    })
-    .map(function (p) {
-      var distance = setup.geo.distance(v.current.lat, v.current.lng, p.lat, p.lng);
-      var bearing = setup.geo.bearing(v.current.lat, v.current.lng, p.lat, p.lng);
-      var relative = v.heading == null ? bearing : setup.geo.normalize(bearing - v.heading);
-
-      return Object.assign({}, p, {
-        distance: distance,
-        bearing: bearing,
-        relative: relative
-      });
-    })
-    .sort(function (a, b) {
-      return a.distance - b.distance;
-    });
-};
-
-
-setup.geo.chooseActivePassage = function () {
+setup.geo.chooseCandidatePassage = function () {
   var v = State.variables.geo;
   if (!v.current) {
     return null;
@@ -585,9 +575,104 @@ setup.geo.chooseActivePassage = function () {
     return p.distance <= p.radius;
   });
 
-  return inside[0] || ranked[0] || null;
+  return inside[0] || null;
 };
 
+setup.geo.updateActiveByDwell = function () {
+  var v = State.variables.geo;
+  var now = Date.now();
+  var candidate = setup.geo.chooseCandidatePassage();
+
+  if (!candidate) {
+    v.candidate = null;
+    v.candidateSince = null;
+    return;
+  }
+
+  if (!v.candidate || v.candidate.name !== candidate.name) {
+    v.candidate = candidate;
+    v.candidateSince = now;
+    return;
+  }
+
+  v.candidate = candidate;
+
+  var dwellNeeded = Number.isFinite(candidate.dwell) ? candidate.dwell : v.dwellMs;
+  var elapsed = now - v.candidateSince;
+
+  if (!v.active || v.active.name !== candidate.name) {
+    if (elapsed >= dwellNeeded) {
+      v.active = candidate;
+      if (v.unlocked.indexOf(candidate.name) === -1) {
+        v.unlocked.push(candidate.name);
+      }
+    }
+  }
+};
+
+setup.geo.getDwellProgress = function () {
+  var v = State.variables.geo;
+
+  if (!v.candidate || !v.candidateSince) {
+    return null;
+  }
+
+  var dwellNeeded = Number.isFinite(v.candidate.dwell) ? v.candidate.dwell : v.dwellMs;
+  var elapsed = Date.now() - v.candidateSince;
+  var pct = Math.max(0, Math.min(1, elapsed / dwellNeeded));
+
+  return {
+    name: v.candidate.name,
+    elapsed: elapsed,
+    required: dwellNeeded,
+    pct: pct
+  };
+};
+
+setup.geo.refreshVisible = function () {
+  var v = State.variables.geo;
+
+  if (!v.current || !v.active) {
+    v.visible = [];
+    return;
+  }
+
+  var linked = setup.geo.getLinkedTargets(v.active.name);
+
+  v.visible = linked
+    .filter(function (name) {
+      return name !== v.active.name && Story.has(name);
+    })
+    .map(function (name) {
+      return setup.geo.getPointByName(name);
+    })
+    .filter(function (p) {
+      return !!p;
+    })
+    .map(function (p) {
+      var distance = setup.geo.distance(v.current.lat, v.current.lng, p.lat, p.lng);
+      var bearing = setup.geo.bearing(v.current.lat, v.current.lng, p.lat, p.lng);
+      var relative = v.heading == null ? bearing : setup.geo.normalize(bearing - v.heading);
+      var threshold = Number.isFinite(p.facing) ? p.facing : v.headingThreshold;
+      var facingDelta = v.heading == null ? 0 : setup.geo.angleDelta(v.heading, bearing);
+      var facingOk = v.heading == null ? true : facingDelta <= threshold;
+
+      return Object.assign({}, p, {
+        distance: distance,
+        bearing: bearing,
+        relative: relative,
+        threshold: threshold,
+        facingDelta: facingDelta,
+        facingOk: facingOk
+      });
+    })
+    .filter(function (p) {
+      return p.facingOk;
+    })
+    .sort(function (a, b) {
+      return a.distance - b.distance;
+    });
+};
 
 setup.geo.renderPassage = function () {
   var titleEl = document.getElementById("passageTitle");
@@ -598,6 +683,7 @@ setup.geo.renderPassage = function () {
   var modeEl = document.getElementById("modeLabel");
   var statusEl = document.getElementById("statusText");
   var v = State.variables.geo;
+  var dwell = setup.geo.getDwellProgress();
 
   if (coordEl) {
     coordEl.textContent = v.current
@@ -613,6 +699,27 @@ setup.geo.renderPassage = function () {
 
   if (modeEl) {
     modeEl.textContent = v.mode;
+  }
+
+  if (v.error) {
+    if (statusEl) {
+      statusEl.textContent = v.error;
+    }
+    return;
+  }
+
+  if (dwell && (!v.active || v.active.name !== dwell.name)) {
+    if (titleEl) { titleEl.textContent = "Approaching " + dwell.name; }
+    if (ledeEl) { ledeEl.textContent = "Hold position to resolve the passage."; }
+    if (bodyEl) {
+      bodyEl.textContent =
+        "Dwell progress: " + Math.round(dwell.pct * 100) + "%\n" +
+        "Remain within range for " + Math.max(0, Math.ceil((dwell.required - dwell.elapsed) / 1000)) + " more seconds.";
+    }
+    if (statusEl) {
+      statusEl.textContent = "Candidate passage detected: " + dwell.name + ". Waiting for dwell time.";
+    }
+    return;
   }
 
   if (!v.active) {
@@ -633,11 +740,7 @@ setup.geo.renderPassage = function () {
     bodyEl.textContent = v.active.body || "";
   }
   if (statusEl) {
-    statusEl.textContent = "Active passage: " + v.active.name + ". Compass points toward linked passages in range.";
-  }
-
-  if (v.error && statusEl) {
-    statusEl.textContent = v.error;
+    statusEl.textContent = "Active passage: " + v.active.name + ". Compass shows linked passages permitted by heading.";
   }
 };
 
@@ -659,6 +762,14 @@ setup.geo.renderCompass = function () {
   arrow.style.transform = "rotate(" + (v.heading == null ? 0 : v.heading) + "deg)";
 
   if (!v.current || !v.active) {
+    return;
+  }
+
+  if (v.visible.length === 0) {
+    var liEmpty = document.createElement("li");
+    liEmpty.className = "gated";
+    liEmpty.textContent = "No linked passages currently within heading threshold.";
+    list.appendChild(liEmpty);
     return;
   }
 
@@ -684,8 +795,7 @@ setup.geo.renderCompass = function () {
 };
 
 setup.geo.refresh = function () {
-  var v = State.variables.geo;
-  v.active = setup.geo.chooseActivePassage();
+  setup.geo.updateActiveByDwell();
   setup.geo.refreshVisible();
   setup.geo.renderPassage();
   setup.geo.renderCompass();
@@ -838,15 +948,26 @@ setup.geo.bindUI = function () {
   }
 };
 
+setup.geo.startHeartbeat = function () {
+  if (setup.geo.heartbeat) {
+    return;
+  }
+
+  setup.geo.heartbeat = setInterval(function () {
+    setup.geo.refresh();
+  }, 1000);
+};
+
 $(document).on(":passagerender", function () {
   setup.geo.bindUI();
+  setup.geo.startHeartbeat();
   setup.geo.refresh();
 });
 
 :: Start
 You are standing inside a geolocated SugarCube story.
 
-The body text is controlled by the nearest geo passage. Links below are hidden routing rules for the compass.
+The body text is controlled by the nearest resolved geo passage. Links below are hidden routing rules for the compass.
 
 <span class="nav-hidden">[[FerryTerminal]]</span>
 <span class="nav-hidden">[[ClockTower]]</span>
@@ -858,6 +979,7 @@ The body text is controlled by the nearest geo passage. Links below are hidden r
 :: FerryTerminal [geo harbour]
 @geo 44.6488,-63.5752,45
 @lede Low metal hum from the harbour.
+@dwell 12000
 
 You arrive at the edge condition between ticketing, weather, and departure.
 
@@ -867,16 +989,18 @@ You arrive at the edge condition between ticketing, weather, and departure.
 :: ClockTower [geo signal history]
 @geo 44.6476,-63.5728,35
 @lede A vertical metronome.
+@dwell 12000
 
 The city keeps time through stone, repetition, and vantage.
-<span class="nav-hidden">[[radstorm]]</span>
 
+<span class="nav-hidden">[[radstorm]]</span>
 <span class="nav-hidden">[[Back to Start->Start]]</span>
 <span class="nav-hidden">[[Waterline]]</span>
 
 :: Waterline [geo threshold]
 @geo 44.6464,-63.5699,30
 @lede Exposure to wind and open distance.
+@dwell 10000
 
 At the waterline the narrative becomes weather-first.
 
@@ -885,6 +1009,7 @@ At the waterline the narrative becomes weather-first.
 :: Resolutes Club [geo]
 @geo 44.635722,-63.572139,5
 @lede A narrow service edge behind the club.
+@dwell 15000
 
 i saw a shiny beacon
 neath the surface of the sea
@@ -894,14 +1019,12 @@ resolutely unto me
 <span class="nav-hidden">[[radstorm]]</span>
 <span class="nav-hidden">[[Irving]]</span>
 <span class="nav-hidden">[[citadel1]]</span>
-
-
-
 <span class="nav-hidden">[[Back to Start->Start]]</span>
 
 :: Irving [geo]
 @geo 44.635278,-63.571000,10
 @lede Refuse, fuel, and back-lot texture.
+@dwell 12000
 
 the irvings take and take
 and take and take some more
@@ -909,10 +1032,12 @@ they think this world is garbage
 and the ground and sky their floor
 
 <span class="nav-hidden">[[Back to Start->Start]]</span>
+<span class="nav-hidden">[[Grainery]]</span>
 
 :: citadel1 [geo]
 @geo 44.647028,-63.578222,30
 @lede First point in the star.
+@dwell 12000
 
 This is the first place in the citadel to go to today.
 
@@ -921,4 +1046,9 @@ This is the first place in the citadel to go to today.
 :: radstorm [geo]
 @geo 44.652917,-63.584667,30
 @lede radstorm
+@dwell 20000
+@facing 25
+
 this is radstorm
+
+<span class="nav-hidden">[[Back to Start->Start]]</span>
