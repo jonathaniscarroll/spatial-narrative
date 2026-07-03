@@ -211,6 +211,10 @@ table.core td {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+.nav-hidden {
+  display: none;
+}
+
 @media (max-width: 760px) {
   table.core,
   table.core tbody,
@@ -459,18 +463,17 @@ $(document).on(":passagerender", function () {
   }
 });
 
-
 :: Start
 You are standing inside a geolocated SugarCube story.
 
 Choose a linked destination, then physically move into range to make it appear in the compass panel.
 
-[[FerryTerminal]]
-[[ClockTower]]
-[[Waterline]]
-[[Resolutes Club]]
-[[Irving]]
-[[citadel1]]
+<span class="nav-hidden">[[FerryTerminal]]</span>
+<span class="nav-hidden">[[ClockTower]]</span>
+<span class="nav-hidden">[[Waterline]]</span>
+<span class="nav-hidden">[[Resolutes Club]]</span>
+<span class="nav-hidden">[[Irving]]</span>
+<span class="nav-hidden">[[citadel1]]</span>
 
 :: FerryTerminal [geo harbour]
 @geo 44.6488,-63.5752,45
@@ -478,8 +481,8 @@ Choose a linked destination, then physically move into range to make it appear i
 
 You arrive at the edge condition between ticketing, weather, and departure.
 
-[[Back to Start->Start]]
-[[ClockTower]]
+<span class="nav-hidden">[[Back to Start->Start]]</span>
+<span class="nav-hidden">[[ClockTower]]</span>
 
 :: ClockTower [geo signal history]
 @geo 44.6476,-63.5728,35
@@ -487,8 +490,8 @@ You arrive at the edge condition between ticketing, weather, and departure.
 
 The city keeps time through stone, repetition, and vantage.
 
-[[Back to Start->Start]]
-[[Waterline]]
+<span class="nav-hidden">[[Back to Start->Start]]</span>
+<span class="nav-hidden">[[Waterline]]</span>
 
 :: Waterline [geo threshold]
 @geo 44.6464,-63.5699,30
@@ -496,7 +499,7 @@ The city keeps time through stone, repetition, and vantage.
 
 At the waterline the narrative becomes weather-first.
 
-[[Back to Start->Start]]
+<span class="nav-hidden">[[Back to Start->Start]]</span>
 
 :: Resolutes Club [geo]
 @geo 44.635722,-63.572139,5
@@ -504,7 +507,7 @@ At the waterline the narrative becomes weather-first.
 
 The alleyway behind the Resolutes Club is dark and foggy, like some sort of archetypal noir side channel.
 
-[[Back to Start->Start]]
+<span class="nav-hidden">[[Back to Start->Start]]</span>
 
 :: Irving [geo]
 @geo 44.635278,-63.571000,30
@@ -512,7 +515,7 @@ The alleyway behind the Resolutes Club is dark and foggy, like some sort of arch
 
 Behind Irving is a garbage can full of trash.
 
-[[Back to Start->Start]]
+<span class="nav-hidden">[[Back to Start->Start]]</span>
 
 :: citadel1 [geo]
 @geo 44.647028,-63.578222,30
@@ -520,4 +523,4 @@ Behind Irving is a garbage can full of trash.
 
 This is the first place in the citadel to go to today.
 
-[[Back to Start->Start]]
+<span class="nav-hidden">[[Back to Start->Start]]</span>
