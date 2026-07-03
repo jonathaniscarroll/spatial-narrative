@@ -298,11 +298,15 @@ setup.geo.getLinkedTargets = function (passageName) {
 
   const text = Story.get(passageName).text;
   const targets = new Set();
-  const re = /\\[\\[([^\\]]+)\]\]/g;
-  let m;
+  const chunks = text.split("[[");
 
-  while ((m = re.exec(text)) !== null) {
-    const raw = m[1].trim();
+  chunks.slice(1).forEach(function (chunk) {
+    const end = chunk.indexOf("]]");
+    if (end === -1) {
+      return;
+    }
+
+    const raw = chunk.slice(0, end).trim();
 
     if (raw.indexOf("->") !== -1) {
       targets.add(raw.split("->")[1].trim());
@@ -316,7 +320,7 @@ setup.geo.getLinkedTargets = function (passageName) {
     else {
       targets.add(raw);
     }
-  }
+  });
 
   return Array.from(targets);
 };
@@ -454,6 +458,7 @@ $(document).on(":passagerender", function () {
     stopBtn.dataset.bound = "1";
   }
 });
+
 
 :: Start
 You are standing inside a geolocated SugarCube story.
