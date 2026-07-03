@@ -489,12 +489,13 @@ setup.geo.points = function () {
 };
 
 setup.geo.getLinkedTargets = function (passageName) {
-  if (!Story.has(passageName)) {
+  if (!passageName || !Story.has(passageName)) {
     return [];
   }
 
   var text = Story.get(passageName).text;
-  var targets = new Set();
+  var targets = [];
+  var seen = Object.create(null);
   var chunks = text.split("[[");
 
   chunks.slice(1).forEach(function (chunk) {
@@ -504,23 +505,65 @@ setup.geo.getLinkedTargets = function (passageName) {
     }
 
     var raw = chunk.slice(0, end).trim();
+    var target = raw;
 
     if (raw.indexOf("->") !== -1) {
-      targets.add(raw.split("->")[1].trim());
+      target = raw.split("->")[1].trim();
     }
     else if (raw.indexOf("<-") !== -1) {
-      targets.add(raw.split("<-")[0].trim());
+      target = raw.split("<-")[0].trim();
     }
     else if (raw.indexOf("|") !== -1) {
-      targets.add(raw.split("|")[1].trim());
+      target = raw.split("|")[1].trim();
     }
-    else {
-      targets.add(raw);
+
+    if (!seen[target]) {
+      seen[target] = true;
+      targets.push(target);
     }
   });
 
-  return Array.from(targets);
+  return targets;
 };
+
+setup.geo.refreshVisible = function () {
+  var v = State.variables.geo;
+
+  if (!v.current || !v.active) {
+    v.visible = [];
+    return;
+  }
+
+  var linked = setup.geo.getLinkedTargets(v.active.name);
+
+  v.visible = linked
+    .filter(function (name) {
+      return name !== v.active.name && Story.has(name);
+    })
+    .map(function (name) {
+      return setup.geo.points().find(function (p) {
+        return p.name === name;
+      });
+    })
+    .filter(function (p) {
+      return !!p;
+    })
+    .map(function (p) {
+      var distance = setup.geo.distance(v.current.lat, v.current.lng, p.lat, p.lng);
+      var bearing = setup.geo.bearing(v.current.lat, v.current.lng, p.lat, p.lng);
+      var relative = v.heading == null ? bearing : setup.geo.normalize(bearing - v.heading);
+
+      return Object.assign({}, p, {
+        distance: distance,
+        bearing: bearing,
+        relative: relative
+      });
+    })
+    .sort(function (a, b) {
+      return a.distance - b.distance;
+    });
+};
+
 
 setup.geo.chooseActivePassage = function () {
   var v = State.variables.geo;
@@ -545,45 +588,6 @@ setup.geo.chooseActivePassage = function () {
   return inside[0] || ranked[0] || null;
 };
 
-setup.geo.refreshVisible = function () {
-  var v = State.variables.geo;
-  var currentPassage = passage();
-  var linked = setup.geo.getLinkedTargets(currentPassage);
-
-  if (!v.current) {
-    v.visible = [];
-    return;
-  }
-
-  v.visible = setup.geo.points()
-    .filter(function (p) {
-      if (v.active && p.name === v.active.name) {
-        return false;
-      }
-      var inRange = setup.geo.distance(v.current.lat, v.current.lng, p.lat, p.lng) <= p.radius;
-      var linkedHere = linked.indexOf(p.name) !== -1;
-      return inRange && linkedHere;
-    })
-    .map(function (p) {
-      var distance = setup.geo.distance(v.current.lat, v.current.lng, p.lat, p.lng);
-      var bearing = setup.geo.bearing(v.current.lat, v.current.lng, p.lat, p.lng);
-      var relative = v.heading == null ? bearing : setup.geo.normalize(bearing - v.heading);
-      return Object.assign({}, p, {
-        distance: distance,
-        bearing: bearing,
-        relative: relative
-      });
-    })
-    .sort(function (a, b) {
-      return a.distance - b.distance;
-    });
-
-  v.visible.forEach(function (p) {
-    if (v.unlocked.indexOf(p.name) === -1) {
-      v.unlocked.push(p.name);
-    }
-  });
-};
 
 setup.geo.renderPassage = function () {
   var titleEl = document.getElementById("passageTitle");
@@ -913,3 +917,8 @@ and the ground and sky their floor
 This is the first place in the citadel to go to today.
 
 <span class="nav-hidden">[[Back to Start->Start]]</span>
+
+:: radstorm [geo]
+@geo 44.652917,-63.584667,30
+@lede radstorm
+this is radstorm
