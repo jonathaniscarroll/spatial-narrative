@@ -9,7 +9,6 @@ Geolocated SugarCube Example
   "start": "Start"
 }
 
-
 :: StoryInit
 <<set $geo to {
   watchId: null,
@@ -19,6 +18,208 @@ Geolocated SugarCube Example
   error: ""
 }>>
 
+:: StoryInterface
+<div class="window">
+  <div class="titlebar">
+    <div>Geo Passage Navigator Core - Netscape Style</div>
+    <div class="buttons">
+      <div class="box"></div><div class="box"></div><div class="box"></div>
+    </div>
+  </div>
+
+  <div class="menubar">File &nbsp; Edit &nbsp; View &nbsp; Go &nbsp; Bookmarks &nbsp; Options &nbsp; Directory &nbsp; Help</div>
+
+  <div class="toolbar">
+    <button id="geo-start" class="button95">Start Geolocation</button>
+    <button id="geo-stop" class="button95">Stop Geolocation</button>
+  </div>
+
+  <div class="layout">
+    <div class="marquee-box">
+      <marquee behavior="scroll" direction="left">
+        LIVE STORY PASSAGE VIEWER :: ACTIVE PASSAGE OPENS BY PROXIMITY :: COMPASS POINTS TO LINKED NODES
+      </marquee>
+    </div>
+
+    <table class="core">
+      <tr>
+        <td width="62%">
+          <div id="passages"></div>
+        </td>
+        <td width="38%">
+          <div class="panel-title">COMPASS</div>
+          <div class="compass-box">
+            <div id="geo-panel"></div>
+          </div>
+        </td>
+      </tr>
+    </table>
+  </div>
+</div>
+
+:: Story Stylesheet [stylesheet]
+html, body {
+  margin: 0;
+  background: #c0c0c0;
+  color: #000000;
+  font-family: "Times New Roman", Times, serif;
+  font-size: 16px;
+}
+
+#ui-bar {
+  display: none;
+}
+
+#story {
+  margin: 0;
+}
+
+a {
+  color: #0000cc;
+}
+
+.window {
+  max-width: 900px;
+  margin: 18px auto;
+  border: 2px solid #000;
+  background: #d4d0c8;
+  box-shadow: 3px 3px 0 #7f7f7f;
+}
+
+.titlebar {
+  background: linear-gradient(90deg, #000080, #1084d0);
+  color: #fff;
+  padding: 6px 8px;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 14px;
+  font-weight: bold;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.buttons {
+  display: flex;
+  gap: 4px;
+}
+
+.box {
+  width: 14px;
+  height: 14px;
+  background: #d4d0c8;
+  border-top: 2px solid #fff;
+  border-left: 2px solid #fff;
+  border-right: 2px solid #404040;
+  border-bottom: 2px solid #404040;
+}
+
+.menubar, .toolbar {
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 13px;
+  background: #d4d0c8;
+  border-top: 1px solid #ffffff;
+  border-bottom: 1px solid #808080;
+  padding: 5px 8px;
+}
+
+.layout {
+  padding: 12px;
+}
+
+table.core {
+  width: 100%;
+  border-collapse: collapse;
+  background: #ffffff;
+  border: 2px inset #c0c0c0;
+}
+
+table.core td {
+  vertical-align: top;
+  border: 1px solid #808080;
+  padding: 10px;
+}
+
+.panel-title {
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 13px;
+  font-weight: bold;
+  margin-bottom: 8px;
+  background: #000080;
+  color: #ffffff;
+  padding: 4px 6px;
+}
+
+.compass-box {
+  background: #f0f0f0;
+  border: 2px groove #c0c0c0;
+  padding: 10px;
+  min-height: 220px;
+}
+
+.marquee-box {
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 12px;
+  background: #ffffe1;
+  border: 1px solid #808080;
+  padding: 4px;
+  margin-bottom: 10px;
+}
+
+.button95 {
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 13px;
+  background: #d4d0c8;
+  color: #000;
+  border-top: 2px solid #ffffff;
+  border-left: 2px solid #ffffff;
+  border-right: 2px solid #404040;
+  border-bottom: 2px solid #404040;
+  padding: 4px 10px;
+  min-height: 30px;
+  cursor: pointer;
+  margin-right: 6px;
+}
+
+.button95:active {
+  border-top: 2px solid #404040;
+  border-left: 2px solid #404040;
+  border-right: 2px solid #ffffff;
+  border-bottom: 2px solid #ffffff;
+}
+
+.target-list {
+  margin: 0;
+  padding-left: 20px;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 13px;
+}
+
+.target-list li {
+  margin-bottom: 8px;
+}
+
+#geo-panel p {
+  margin-top: 0;
+}
+
+.passage {
+  font-size: 20px;
+  line-height: 1.45;
+}
+
+.passage a {
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+@media (max-width: 760px) {
+  table.core,
+  table.core tbody,
+  table.core tr,
+  table.core td {
+    display: block;
+    width: 100%;
+  }
+}
 
 :: Story JavaScript [script]
 window.setup = window.setup || {};
@@ -34,16 +235,18 @@ setup.geo.parse = function (passageText) {
   };
   const body = [];
 
-  lines.forEach(line => {
+  lines.forEach(function (line) {
     const trimmed = line.trim();
 
-    if (trimmed.startsWith("@geo ")) {
-      const parts = trimmed.slice(5).split(",").map(v => Number(v.trim()));
+    if (trimmed.indexOf("@geo ") === 0) {
+      const parts = trimmed.slice(5).split(",").map(function (v) {
+        return Number(v.trim());
+      });
       meta.lat = parts[0];
       meta.lng = parts[1];
       meta.radius = Number.isFinite(parts[2]) ? parts[2] : 30;
     }
-    else if (trimmed.startsWith("@lede ")) {
+    else if (trimmed.indexOf("@lede ") === 0) {
       meta.lede = trimmed.slice(6).trim();
     }
     else {
@@ -57,21 +260,21 @@ setup.geo.parse = function (passageText) {
 
 setup.geo.distance = function (aLat, aLng, bLat, bLng) {
   const R = 6371000;
-  const toRad = d => d * Math.PI / 180;
+  const toRad = function (d) { return d * Math.PI / 180; };
   const dLat = toRad(bLat - aLat);
   const dLng = toRad(bLng - aLng);
 
   const q =
-    Math.sin(dLat / 2) ** 2 +
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) *
-    Math.sin(dLng / 2) ** 2;
+    Math.sin(dLng / 2) * Math.sin(dLng / 2);
 
   return 2 * R * Math.atan2(Math.sqrt(q), Math.sqrt(1 - q));
 };
 
 setup.geo.points = function () {
   return Story.lookup("tags", "geo")
-    .map(p => {
+    .map(function (p) {
       const parsed = setup.geo.parse(p.text);
       return {
         name: p.title,
@@ -83,7 +286,9 @@ setup.geo.points = function () {
         body: parsed.body
       };
     })
-    .filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lng));
+    .filter(function (p) {
+      return Number.isFinite(p.lat) && Number.isFinite(p.lng);
+    });
 };
 
 setup.geo.getLinkedTargets = function (passageName) {
@@ -99,24 +304,21 @@ setup.geo.getLinkedTargets = function (passageName) {
   while ((m = re.exec(text)) !== null) {
     const raw = m[1].trim();
 
-    if (raw.includes("->")) {
-      const parts = raw.split("->");
-      targets.add(parts[1].trim());
+    if (raw.indexOf("->") !== -1) {
+      targets.add(raw.split("->")[1].trim());
     }
-    else if (raw.includes("<-")) {
-      const parts = raw.split("<-");
-      targets.add(parts[0].trim());
+    else if (raw.indexOf("<-") !== -1) {
+      targets.add(raw.split("<-")[0].trim());
     }
-    else if (raw.includes("|")) {
-      const parts = raw.split("|");
-      targets.add(parts[1].trim());
+    else if (raw.indexOf("|") !== -1) {
+      targets.add(raw.split("|")[1].trim());
     }
     else {
       targets.add(raw);
     }
   }
 
-  return [...targets];
+  return Array.from(targets);
 };
 
 setup.geo.currentLinks = function () {
@@ -125,27 +327,24 @@ setup.geo.currentLinks = function () {
 
 setup.geo.evaluate = function (lat, lng) {
   const v = State.variables;
+  const linked = setup.geo.currentLinks();
 
   v.geo.current = { lat: lat, lng: lng };
   v.geo.error = "";
 
-  const linked = setup.geo.currentLinks();
-
-  const visible = setup.geo.points().filter(p => {
+  v.geo.visible = setup.geo.points().filter(function (p) {
     const inRange = setup.geo.distance(lat, lng, p.lat, p.lng) <= p.radius;
-    const linkedHere = linked.includes(p.name);
+    const linkedHere = linked.indexOf(p.name) !== -1;
     return inRange && linkedHere;
   });
 
-  v.geo.visible = visible;
-
-  visible.forEach(p => {
-    if (!v.geo.unlocked.includes(p.name)) {
+  v.geo.visible.forEach(function (p) {
+    if (v.geo.unlocked.indexOf(p.name) === -1) {
       v.geo.unlocked.push(p.name);
     }
   });
 
-  Engine.show();
+  setup.geo.renderPanel();
 };
 
 setup.geo.start = function () {
@@ -153,7 +352,7 @@ setup.geo.start = function () {
 
   if (!navigator.geolocation) {
     v.geo.error = "Geolocation is unavailable in this browser.";
-    Engine.show();
+    setup.geo.renderPanel();
     return;
   }
 
@@ -162,12 +361,12 @@ setup.geo.start = function () {
   }
 
   v.geo.watchId = navigator.geolocation.watchPosition(
-    pos => {
+    function (pos) {
       setup.geo.evaluate(pos.coords.latitude, pos.coords.longitude);
     },
-    err => {
+    function (err) {
       v.geo.error = err.message || "Geolocation error.";
-      Engine.show();
+      setup.geo.renderPanel();
     },
     {
       enableHighAccuracy: true,
@@ -184,10 +383,13 @@ setup.geo.stop = function () {
     navigator.geolocation.clearWatch(v.geo.watchId);
     v.geo.watchId = null;
   }
+
+  setup.geo.renderPanel();
 };
 
 setup.geo.formatCoords = function () {
   const current = State.variables.geo.current;
+
   if (!current) {
     return "No coordinates yet.";
   }
@@ -195,60 +397,75 @@ setup.geo.formatCoords = function () {
   return current.lat.toFixed(6) + ", " + current.lng.toFixed(6);
 };
 
+setup.geo.renderPanel = function () {
+  const panel = document.getElementById("geo-panel");
+  if (!panel) {
+    return;
+  }
+
+  const v = State.variables;
+  let html = "<p><strong>Current coordinates:</strong> " + setup.geo.formatCoords() + "</p>";
+
+  if (v.geo.error) {
+    html += "<p><strong>Error:</strong> " + v.geo.error + "</p>";
+  }
+
+  if (v.geo.visible && v.geo.visible.length > 0) {
+    html += '<ul class="target-list">';
+    v.geo.visible.forEach(function (p) {
+      html += '<li><a href="javascript:void(0)" class="geo-link" data-passage="' + p.name.replace(/"/g, "&quot;") + '">' + p.name + "</a>";
+      if (p.lede) {
+        html += "<br>" + p.lede;
+      }
+      html += "</li>";
+    });
+    html += "</ul>";
+  }
+  else {
+    html += "<p>No linked locations in range.</p>";
+  }
+
+  panel.innerHTML = html;
+
+  Array.from(panel.querySelectorAll(".geo-link")).forEach(function (link) {
+    link.addEventListener("click", function () {
+      Engine.play(this.getAttribute("data-passage"));
+    });
+  });
+};
+
+$(document).on(":passagerender", function () {
+  setup.geo.renderPanel();
+
+  const startBtn = document.getElementById("geo-start");
+  const stopBtn = document.getElementById("geo-stop");
+
+  if (startBtn && !startBtn.dataset.bound) {
+    startBtn.addEventListener("click", function () {
+      setup.geo.start();
+    });
+    startBtn.dataset.bound = "1";
+  }
+
+  if (stopBtn && !stopBtn.dataset.bound) {
+    stopBtn.addEventListener("click", function () {
+      setup.geo.stop();
+    });
+    stopBtn.dataset.bound = "1";
+  }
+});
 
 :: Start
 You are standing inside a geolocated SugarCube story.
 
+Choose a linked destination, then physically move into range to make it appear in the compass panel.
+
 [[FerryTerminal]]
 [[ClockTower]]
 [[Waterline]]
-[[citadel1]]
 [[Resolutes Club]]
 [[Irving]]
-
-<<button "Start geolocation">>
-  <<run setup.geo.start()>>
-<</button>>
-
-<<button "Stop geolocation">>
-  <<run setup.geo.stop()>>
-<</button>>
-
-<p><strong>Current coordinates:</strong> <<= setup.geo.formatCoords()>></p>
-
-<<if $geo.error>>
-  <p><strong>Error:</strong> <<= $geo.error>></p>
-<</if>>
-
-<p><strong>Compass targets:</strong></p>
-
-<<if $geo.visible.length gt 0>>
-  <ul>
-  <<for _p range $geo.visible>>
-    <li>
-      <<link _p.name>>
-        <<goto _p.name>>
-      <</link>>
-      <<if _p.lede>> -- <<= _p.lede>><</if>>
-    </li>
-  <</for>>
-  </ul>
-<<else>>
-  <p>No linked locations are currently in range.</p>
-<</if>>
-
-<p><strong>Unlocked passages:</strong></p>
-
-<<if $geo.unlocked.length gt 0>>
-  <ul>
-  <<for _name range $geo.unlocked>>
-    <li><<= _name>></li>
-  <</for>>
-  </ul>
-<<else>>
-  <p>No unlocks recorded.</p>
-<</if>>
-
+[[citadel1]]
 
 :: FerryTerminal [geo harbour]
 @geo 44.6488,-63.5752,45
@@ -294,8 +511,8 @@ Behind Irving is a garbage can full of trash.
 
 :: citadel1 [geo]
 @geo 44.647028,-63.578222,30
-@lede first point in the star.
+@lede First point in the star.
 
-this is the first place in the citadel to go to today
+This is the first place in the citadel to go to today.
 
 [[Back to Start->Start]]
