@@ -1106,6 +1106,7 @@ At the waterline the narrative becomes weather-first.
 @after 10000
 @then ResolutesClub_late
 @dir 80-160:ResolutesClub_east
+@dir 0-45:
 
 i saw a shiny beacon
 neath the surface of the sea
@@ -1120,7 +1121,7 @@ What first looked like a threshold begins to feel like aftermath.
 :: ResolutesClub_east
 @lede Facing east.
 
-The beacon becomes industrial. Reflection gives way to extraction.
+No parking down the stairwell 
 
 :: Irving [geo]
 @geo 44.635278,-63.571000,10
