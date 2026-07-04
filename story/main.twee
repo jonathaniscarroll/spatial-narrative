@@ -1100,13 +1100,12 @@ The clock stops reading as ornament and starts reading as command.
 At the waterline the narrative becomes weather-first.
 
 :: Resolutes Club [geo]
-@geo 44.635722,-63.572139,5
+@geo 44.635722,-63.572139,50
 @lede A narrow service edge behind the club.
 @dwell 15000
 @after 10000
 @then ResolutesClub_late
 @dir 80-160:ResolutesClub_east
-@dir 0-45:
 
 i saw a shiny beacon
 neath the surface of the sea
