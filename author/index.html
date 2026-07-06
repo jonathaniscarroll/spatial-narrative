@@ -268,6 +268,14 @@ body {
 .map-popup .btn {
   flex: 1;
 }
+
+/* Link helper for inserting [[Target]] into body text */
+.link-helper {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
 </style>
 </head>
 <body>
@@ -659,6 +667,41 @@ function renderEditor() {
       updateRawPreview();
     });
   });
+
+  // Link helper: buttons to insert [[Target]] into body text
+  const bodyEl = document.getElementById('f_body');
+  if (bodyEl) {
+    const helperRow = document.createElement('div');
+    helperRow.className = 'field-row';
+    const label = document.createElement('label');
+    label.textContent = 'Link helper (click to insert [[Target]] into body)';
+    helperRow.appendChild(label);
+
+    const helper = document.createElement('div');
+    helper.className = 'link-helper';
+
+    passages.forEach((other, idx) => {
+      if (idx === selectedIndex) return;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn';
+      btn.textContent = other.name;
+      btn.addEventListener('click', () => {
+        insertAtCursor(bodyEl, `[[${other.name}]]`);
+        updateRawPreview();
+      });
+      helper.appendChild(btn);
+    });
+
+    if (!helper.childNodes.length) {
+      const empty = document.createElement('span');
+      empty.textContent = 'No other passages yet.';
+      helper.appendChild(empty);
+    }
+
+    helperRow.appendChild(helper);
+    panel.appendChild(helperRow);
+  }
 }
 
 function applyEdits() {
@@ -812,6 +855,16 @@ function decodeBase64Unicode(b64) {
 function switchTab(name) {
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
   document.querySelectorAll('.tab-content').forEach(tc => tc.classList.toggle('active', tc.id === 'tab-' + name));
+}
+function insertAtCursor(textarea, text) {
+  const start = textarea.selectionStart ?? textarea.value.length;
+  const end = textarea.selectionEnd ?? textarea.value.length;
+  const before = textarea.value.slice(0, start);
+  const after = textarea.value.slice(end);
+  textarea.value = before + text + after;
+  const newPos = start + text.length;
+  textarea.selectionStart = textarea.selectionEnd = newPos;
+  textarea.focus();
 }
 
 // --- EVENTS ---
