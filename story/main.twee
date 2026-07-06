@@ -21,6 +21,7 @@ Geo Passage Navigator Core
   candidate: null,
   candidateSince: null,
   visible: [],
+  lastLinked: [],
   unlocked: [],
   error: "",
   mode: "Idle",
@@ -326,6 +327,15 @@ table.core td {
   background: #ff9900;
 }
 
+.marker.stale .dot {
+  background: #808080;
+  border-color: #404040;
+}
+
+.marker.stale .line {
+  background: #808080;
+}
+
 .target-list {
   margin: 0;
   padding-left: 20px;
@@ -426,17 +436,14 @@ setup.geo.injectAppMeta = function () {
     m.content = t.content;
     head.appendChild(m);
   });
-  // Apple touch icon
   var iconLink = document.createElement('link');
   iconLink.rel = 'apple-touch-icon';
   iconLink.href = 'icon-180.png';
   head.appendChild(iconLink);
-  // Web manifest (Android / Chrome)
   var manifestLink = document.createElement('link');
   manifestLink.rel = 'manifest';
   manifestLink.href = 'manifest.json';
   head.appendChild(manifestLink);
-  // Sentinel so we only run once
   var sentinel = document.createElement('meta');
   sentinel.id = 'geo-app-meta-injected';
   head.appendChild(sentinel);
@@ -611,7 +618,6 @@ setup.geo.updateActiveByDwell = function () {
   var candidate = setup.geo.chooseCandidatePassage();
 
   if (!candidate) {
-    // Outside all radii — preserve active/displayed, clear candidate tracking only
     v.candidate      = null;
     v.candidateSince = null;
     return;
@@ -685,58 +691,79 @@ setup.geo.updateDisplayedPassage = function () {
   v.displayed      = directional || baseName;
 };
 
+// ── buildVisibleList ───────────────────────────────────────────────────────
+// Shared helper: given an array of geo point objects, compute bearing/relative
+// from current position and return sorted by distance.
+// In pre-active mode (preActive=true) facing threshold is NOT applied —
+// we want ALL points visible so the compass is useful immediately.
+setup.geo.buildVisibleList = function (points, preActive) {
+  var v = State.variables.geo;
+  return points
+    .map(function (p) {
+      var distance    = setup.geo.distance(v.current.lat, v.current.lng, p.lat, p.lng);
+      var bearing     = setup.geo.bearing(v.current.lat, v.current.lng, p.lat, p.lng);
+      var relative    = v.heading == null ? bearing : setup.geo.normalize(bearing - v.heading);
+      var threshold   = Number.isFinite(p.facing) ? p.facing : v.headingThreshold;
+      var facingDelta = v.heading == null ? 0 : setup.geo.angleDelta(v.heading, bearing);
+      var facingOk    = preActive ? true : (v.heading == null ? true : facingDelta <= threshold);
+      return Object.assign({}, p, {
+        distance: distance, bearing: bearing,
+        relative: relative, threshold: threshold,
+        facingDelta: facingDelta, facingOk: facingOk
+      });
+    })
+    .filter(function (p) { return p.facingOk; })
+    .sort(function (a, b) { return a.distance - b.distance; });
+};
+
 setup.geo.refreshVisible = function () {
   var v = State.variables.geo;
   if (!v.current) { v.visible = []; return; }
 
-  // ── Pre-active browse mode: use real bearings from current position ───────
-  // When there is no active passage yet, populate visible from all geo points
-  // (or just Start-linked ones) so the compass markers move as soon as GPS locks.
+  // ── Pre-active mode ───────────────────────────────────────────────────────
+  // No passage has been dwelled into yet. Show Start-linked geo points
+  // (or all geo points if Start has no links) using real bearings.
+  // Facing threshold is deliberately skipped here — we show everything
+  // so the compass is immediately useful the moment GPS locks.
   if (!v.active) {
     var startTargets = setup.geo.getLinkedTargets('Start');
     var allPoints    = setup.geo.points();
     var browsePoints = startTargets.length > 0
       ? allPoints.filter(function (p) { return startTargets.indexOf(p.name) !== -1; })
       : allPoints;
-
-    v.visible = browsePoints.map(function (p) {
-      var distance   = setup.geo.distance(v.current.lat, v.current.lng, p.lat, p.lng);
-      var bearing    = setup.geo.bearing(v.current.lat, v.current.lng, p.lat, p.lng);
-      var relative   = v.heading == null ? bearing : setup.geo.normalize(bearing - v.heading);
-      var threshold  = Number.isFinite(p.facing) ? p.facing : v.headingThreshold;
-      var facingDelta = v.heading == null ? 0 : setup.geo.angleDelta(v.heading, bearing);
-      var facingOk   = v.heading == null ? true : facingDelta <= threshold;
-      return Object.assign({}, p, {
-        distance: distance, bearing: bearing,
-        relative: relative, threshold: threshold,
-        facingDelta: facingDelta, facingOk: facingOk
-      });
-    })
-    .filter(function (p) { return p.facingOk; })
-    .sort(function (a, b) { return a.distance - b.distance; });
+    v.visible = setup.geo.buildVisibleList(browsePoints, true /* preActive — skip facing filter */);
     return;
   }
 
+  // ── Active mode ───────────────────────────────────────────────────────────
+  // Passage has been dwelled into. Show the geo points linked from active.
+  // Apply facing threshold as normal.
   var linked = setup.geo.getLinkedTargets(v.active.name);
-  v.visible = linked
+  var linkedPoints = linked
     .filter(function (name) { return name !== v.active.name && Story.has(name); })
     .map(function (name)    { return setup.geo.getPointByName(name); })
-    .filter(function (p)    { return !!p; })
-    .map(function (p) {
-      var distance   = setup.geo.distance(v.current.lat, v.current.lng, p.lat, p.lng);
-      var bearing    = setup.geo.bearing(v.current.lat, v.current.lng, p.lat, p.lng);
-      var relative   = v.heading == null ? bearing : setup.geo.normalize(bearing - v.heading);
-      var threshold  = Number.isFinite(p.facing) ? p.facing : v.headingThreshold;
-      var facingDelta = v.heading == null ? 0 : setup.geo.angleDelta(v.heading, bearing);
-      var facingOk   = v.heading == null ? true : facingDelta <= threshold;
-      return Object.assign({}, p, {
-        distance: distance, bearing: bearing,
-        relative: relative, threshold: threshold,
-        facingDelta: facingDelta, facingOk: facingOk
-      });
-    })
-    .filter(function (p) { return p.facingOk; })
-    .sort(function (a, b) { return a.distance - b.distance; });
+    .filter(function (p)    { return !!p; });
+
+  var freshList = setup.geo.buildVisibleList(linkedPoints, false);
+
+  // Keep freshList as the new lastLinked whenever it is non-empty,
+  // so we have something to fall back on between passages.
+  if (freshList.length > 0) {
+    v.lastLinked = freshList;
+    v.visible    = freshList;
+  } else {
+    // Between passages: freshList is empty (facing threshold filtered everything,
+    // or we stepped out of range). Keep showing the last linked set with stale
+    // bearings updated to current position so markers still track movement.
+    if (v.lastLinked && v.lastLinked.length > 0) {
+      // Re-derive bearings/relative from current position so dots move correctly
+      var stalePoints = v.lastLinked.map(function (p) { return setup.geo.getPointByName(p.name); }).filter(Boolean);
+      v.visible = setup.geo.buildVisibleList(stalePoints, true /* skip facing filter for stale fallback */);
+      v.visible = v.visible.map(function (p) { return Object.assign({}, p, { stale: true }); });
+    } else {
+      v.visible = [];
+    }
+  }
 };
 
 setup.geo.getShownPassage = function () {
@@ -776,7 +803,6 @@ setup.geo.renderPassage = function () {
   if (modeEl)    { modeEl.textContent    = v.mode; }
   if (displayEl) { displayEl.textContent = v.displayed || 'None'; }
 
-  // Helper to set image
   var setMedia = function (passage) {
     if (imageWrap && imageEl) {
       if (passage && passage.image) {
@@ -853,16 +879,32 @@ setup.geo.renderCompass = function () {
   Array.from(compass.querySelectorAll('.marker')).forEach(function (el) { el.remove(); });
   arrow.style.transform = 'rotate(' + (v.heading == null ? 0 : v.heading) + 'deg)';
 
-  // ── Compass markers: always driven by v.visible bearings ──────────────────
-  if (!v.current || v.visible.length === 0) {
+  if (!v.current) {
     var liInfo = document.createElement('li');
     liInfo.className = 'gated';
     liInfo.style.marginTop = '8px';
-    liInfo.textContent = v.current
-      ? 'No passages currently within heading threshold.'
-      : 'Start GPS to activate proximity.';
+    liInfo.textContent = 'Start GPS to activate proximity.';
     list.appendChild(liInfo);
     return;
+  }
+
+  if (v.visible.length === 0) {
+    var liEmpty = document.createElement('li');
+    liEmpty.className = 'gated';
+    liEmpty.style.marginTop = '8px';
+    liEmpty.textContent = 'No passages within heading threshold.';
+    list.appendChild(liEmpty);
+    return;
+  }
+
+  var isStale = v.visible.length > 0 && v.visible[0].stale;
+
+  if (isStale) {
+    var staleNote = document.createElement('li');
+    staleNote.className = 'gated';
+    staleNote.style.marginBottom = '6px';
+    staleNote.textContent = '\u25cb Last linked passages (between passages):';
+    list.appendChild(staleNote);
   }
 
   v.visible.forEach(function (p, i) {
@@ -872,11 +914,11 @@ setup.geo.renderCompass = function () {
     link.textContent = p.name;
     link.addEventListener('click', function () { Engine.play(p.name); });
     li.appendChild(link);
-    li.innerHTML += '<br>' + Math.round(p.distance) + ' m away<br>Bearing ' + Math.round(p.bearing) + '°';
+    li.innerHTML += '<br>' + Math.round(p.distance) + ' m away<br>Bearing ' + Math.round(p.bearing) + '\u00b0';
     list.appendChild(li);
 
     var marker = document.createElement('div');
-    marker.className = 'marker' + (i === 0 ? ' active' : '');
+    marker.className = 'marker' + (i === 0 && !isStale ? ' active' : '') + (isStale ? ' stale' : '');
     marker.style.transform = 'rotate(' + p.relative + 'deg)';
     marker.innerHTML = '<div class="line"></div><div class="dot"></div>';
     compass.appendChild(marker);
