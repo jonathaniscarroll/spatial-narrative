@@ -2,17 +2,14 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<!-- iOS PWA: fullscreen standalone, no browser chrome -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="SN Author">
 <meta name="mobile-web-app-capable" content="yes">
-<!-- Viewport: no user-scaling, fills safe area on notched devices -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#000080">
 <title>Spatial Narrative — Authoring Tool</title>
 <link rel="manifest" href="manifest.json">
-<!-- Apple touch icon (used for Home Screen icon) -->
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
@@ -412,6 +409,43 @@ body {
 .map-popup .popup-actions { display: flex; gap: 6px; }
 .map-popup .btn { flex: 1; }
 
+/* Links field: chip-style tags for each [[Link]] */
+.link-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  background: #fff;
+  border: 2px inset var(--border-mid);
+  padding: 6px;
+  min-height: 36px;
+}
+.link-chip {
+  background: var(--navy);
+  color: #fff;
+  font-size: 12px;
+  padding: 3px 6px 3px 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-family: Arial, sans-serif;
+}
+.link-chip .remove-link {
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  color: #fff;
+  background: none;
+  border: none;
+  padding: 0 2px;
+  -webkit-tap-highlight-color: transparent;
+}
+.link-hint {
+  font-size: 11px;
+  color: #666;
+  font-style: italic;
+  margin-top: 2px;
+}
+/* Link helper buttons (add from existing passages) */
 .link-helper {
   display: flex;
   flex-wrap: wrap;
@@ -560,7 +594,7 @@ map.on('click', function(e) {
     const name = nameInput ? nameInput.value.trim() : '';
     if (!name) { nameInput.style.outline = '2px solid red'; return; }
     passages.push({ name, tags: ['geo'], lat: parseFloat(lat), lng: parseFloat(lng),
-      radius: 20, lede: '', dwell: 12000, after: null, then: null, facing: null, dirs: [], body: '' });
+      radius: 20, lede: '', dwell: 12000, after: null, then: null, facing: null, dirs: [], links: [], body: '' });
     map.closePopup(activePopup); activePopup = null;
     const i = passages.length - 1;
     buildMarkers(); renderPassageList('');
@@ -576,6 +610,29 @@ map.on('click', function(e) {
     if (ev.key === 'Escape') container.querySelector('#popupCancel').click();
   });
 });
+
+// ── Parse [[links]] out of body text into a separate array ────────────────
+function extractLinks(bodyText) {
+  const links = [];
+  const seen = Object.create(null);
+  const chunks = bodyText.split('[[');
+  chunks.slice(1).forEach(chunk => {
+    const end = chunk.indexOf(']]');
+    if (end === -1) return;
+    let raw = chunk.slice(0, end).trim();
+    let target = raw;
+    if (raw.indexOf('->') !== -1)      { target = raw.split('->')[1].trim(); }
+    else if (raw.indexOf('<-') !== -1) { target = raw.split('<-')[0].trim(); }
+    else if (raw.indexOf('|') !== -1)  { target = raw.split('|')[1].trim(); }
+    if (target && !seen[target]) { seen[target] = true; links.push(target); }
+  });
+  return links;
+}
+
+// Strip [[...]] from body text (they live in the links array now)
+function stripLinks(bodyText) {
+  return bodyText.replace(/\[\[[^\]]*\]\]/g, '').replace(/\n{3,}/g, '\n\n').trim();
+}
 
 function parseTwee(text) {
   const blocks = text.split(/(?=^:: )/m).filter(b => b.trim());
@@ -606,8 +663,11 @@ function parseTwee(text) {
       } else if (t.startsWith('<span class="nav-hidden">')) {
       } else { bodyLines.push(line); }
     });
-    return { name, tags, lat, lng, radius, lede, dwell, after, then: then_, facing, dirs,
-      body: bodyLines.join('\n').replace(/^\n+|\n+$/g, ''), _raw: block };
+    const rawBody = bodyLines.join('\n').replace(/^\n+|\n+$/g, '');
+    // Separate [[links]] from prose body
+    const links = extractLinks(rawBody);
+    const body  = stripLinks(rawBody);
+    return { name, tags, lat, lng, radius, lede, dwell, after, then: then_, facing, dirs, links, body, _raw: block };
   }).filter(Boolean);
 }
 
@@ -616,13 +676,18 @@ function serializePassage(p) {
   let out = ':: ' + p.name + tagStr + '\n';
   if (p.tags.includes('geo') && isFinite(p.lat) && isFinite(p.lng))
     out += '@geo ' + p.lat.toFixed(6) + ',' + p.lng.toFixed(6) + ',' + (p.radius || 30) + '\n';
-  if (p.lede) out += '@lede ' + p.lede + '\n';
+  if (p.lede)   out += '@lede ' + p.lede + '\n';
   if (p.dwell != null) out += '@dwell ' + p.dwell + '\n';
   if (p.facing != null) out += '@facing ' + p.facing + '\n';
   if (p.after != null) out += '@after ' + p.after + '\n';
-  if (p.then) out += '@then ' + p.then + '\n';
+  if (p.then)   out += '@then ' + p.then + '\n';
   p.dirs.forEach(d => { out += '@dir ' + d.start + '-' + d.end + ':' + d.target + '\n'; });
-  if (p.body) out += '\n' + p.body + '\n';
+  // Body prose
+  if (p.body)  out += '\n' + p.body + '\n';
+  // [[Links]] — each on its own line, always present if any
+  if (p.links && p.links.length > 0) {
+    out += '\n' + p.links.map(l => '[[' + l + ']]').join('\n') + '\n';
+  }
   return out;
 }
 function serializeAll() { return passages.map(serializePassage).join('\n'); }
@@ -683,6 +748,28 @@ function selectPassage(i) {
   if (isFinite(p.lat) && isFinite(p.lng)) map.panTo([p.lat, p.lng]);
 }
 
+// ── Render the links chips UI ──────────────────────────────────────────────
+// Reads from passages[selectedIndex].links and renders chip buttons.
+// Removing a chip immediately writes back to the passage and refreshes raw.
+function renderLinkChips() {
+  const p = passages[selectedIndex];
+  const container = document.getElementById('linkChips');
+  if (!container) return;
+  container.innerHTML = '';
+  (p.links || []).forEach((name, li) => {
+    const chip = document.createElement('span');
+    chip.className = 'link-chip';
+    chip.innerHTML = escHtml(name) +
+      '<button class="remove-link" title="Remove link" data-li="' + li + '">✕</button>';
+    chip.querySelector('.remove-link').addEventListener('click', () => {
+      p.links.splice(li, 1);
+      renderLinkChips();
+      updateRawPreview();
+    });
+    container.appendChild(chip);
+  });
+}
+
 function renderEditor() {
   const panel = document.getElementById('editorPanel');
   if (selectedIndex === null || !passages[selectedIndex]) {
@@ -690,6 +777,9 @@ function renderEditor() {
   }
   const p = passages[selectedIndex];
   const isGeo = p.tags.includes('geo');
+  // Ensure links array exists (handles passages loaded before this field existed)
+  if (!Array.isArray(p.links)) p.links = [];
+
   panel.innerHTML = `
     <div class="field-row">
       <label>Passage Name</label>
@@ -750,12 +840,50 @@ function renderEditor() {
       <input type="text" id="f_lede" value="${escAttr(p.lede ?? '')}">
     </div>
     <div class="field-row">
-      <label>Body Text</label>
+      <label>Body Text (prose only — links are managed below)</label>
       <textarea id="f_body" rows="6">${escHtml(p.body ?? '')}</textarea>
+    </div>
+    <div class="field-row">
+      <label>Linked Passages <span style="font-weight:normal;font-style:italic;text-transform:none;">(appear in compass; serialised as [[Name]])</span></label>
+      <div class="link-chips" id="linkChips"></div>
+      <span class="link-hint">Tap a passage below to add it as a link — changes save immediately.</span>
+    </div>
+    <div class="field-row">
+      <label>Add Link</label>
+      <div class="link-helper" id="linkHelper"></div>
     </div>
     <button class="btn primary" id="applyBtn" style="margin-bottom:8px;">Apply Changes</button>
   `;
+
+  // Populate chips
+  renderLinkChips();
+
+  // Populate add-link helper buttons
+  const helper = document.getElementById('linkHelper');
+  passages.forEach((other, idx) => {
+    if (idx === selectedIndex) return;
+    const btn = document.createElement('button');
+    btn.type = 'button'; btn.className = 'btn'; btn.textContent = other.name;
+    btn.addEventListener('click', () => {
+      const p2 = passages[selectedIndex];
+      if (!Array.isArray(p2.links)) p2.links = [];
+      if (!p2.links.includes(other.name)) {
+        p2.links.push(other.name);
+        renderLinkChips();
+        updateRawPreview();
+        setStatus('Linked "' + other.name + '" to "' + p2.name + '". Apply + Save to commit.');
+      }
+    });
+    helper.appendChild(btn);
+  });
+  if (!helper.childNodes.length) {
+    const empty = document.createElement('span');
+    empty.textContent = 'No other passages yet.';
+    helper.appendChild(empty);
+  }
+
   document.getElementById('applyBtn').addEventListener('click', applyEdits);
+
   const addDir = document.getElementById('addDirBtn');
   if (addDir) addDir.addEventListener('click', () => {
     passages[selectedIndex].dirs.push({ start: 0, end: 45, target: '' });
@@ -768,29 +896,6 @@ function renderEditor() {
       renderEditor(); updateRawPreview();
     });
   });
-  const bodyEl = document.getElementById('f_body');
-  if (bodyEl) {
-    const helperRow = document.createElement('div');
-    helperRow.className = 'field-row';
-    const lbl = document.createElement('label');
-    lbl.textContent = 'Link helper (tap to insert [[Target]] into body)';
-    helperRow.appendChild(lbl);
-    const helper = document.createElement('div');
-    helper.className = 'link-helper';
-    passages.forEach((other, idx) => {
-      if (idx === selectedIndex) return;
-      const btn = document.createElement('button');
-      btn.type = 'button'; btn.className = 'btn'; btn.textContent = other.name;
-      btn.addEventListener('click', () => { insertAtCursor(bodyEl, `[[${other.name}]]`); updateRawPreview(); });
-      helper.appendChild(btn);
-    });
-    if (!helper.childNodes.length) {
-      const empty = document.createElement('span'); empty.textContent = 'No other passages yet.';
-      helper.appendChild(empty);
-    }
-    helperRow.appendChild(helper);
-    panel.appendChild(helperRow);
-  }
 }
 
 function applyEdits() {
@@ -799,7 +904,14 @@ function applyEdits() {
   p.name = document.getElementById('f_name').value.trim();
   p.tags = document.getElementById('f_tags').value.trim().split(/\s+/).filter(Boolean);
   p.lede = document.getElementById('f_lede').value.trim();
-  p.body = document.getElementById('f_body').value;
+  // Body: strip any [[links]] the author may have typed directly; they belong in p.links
+  const rawBody = document.getElementById('f_body').value;
+  const inlineLinks = extractLinks(rawBody);
+  inlineLinks.forEach(l => {
+    if (!p.links) p.links = [];
+    if (!p.links.includes(l)) p.links.push(l);
+  });
+  p.body = stripLinks(rawBody);
   if (p.tags.includes('geo')) {
     p.lat = parseFloat(document.getElementById('f_lat').value);
     p.lng = parseFloat(document.getElementById('f_lng').value);
@@ -819,6 +931,7 @@ function applyEdits() {
   }
   buildMarkers();
   renderPassageList(document.getElementById('passageSearch').value);
+  renderEditor();
   updateRawPreview();
   setStatus('Applied changes to "' + p.name + '".');
 }
