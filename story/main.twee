@@ -50,6 +50,7 @@ Geo Passage Navigator Core
     <button class="button95" id="orientBtn">Enable Compass</button>
     <button class="button95" id="simBtn">Simulate Walk</button>
     <button class="button95" id="themeBtn">Gray Mode</button>
+    <input type="password" id="ghTokenInput" class="token-input" placeholder="GitHub token (for comments)" autocomplete="current-password">
   </div>
 
   <div class="layout">
@@ -74,6 +75,16 @@ Geo Passage Navigator Core
           </div>
           <div class="passage-audio-wrap" id="passageAudioWrap" style="display:none;">
             <audio id="passageAudio" controls style="width:100%;margin-bottom:10px;"></audio>
+          </div>
+          <!-- Comments panel: shown only when a passage is active -->
+          <div id="commentsPanel" style="display:none;">
+            <div class="panel-title" style="margin-top:14px;">FIELD NOTES AT THIS LOCATION</div>
+            <div id="commentList" class="comment-list"></div>
+            <div class="comment-form">
+              <textarea id="commentInput" class="comment-textarea" placeholder="Leave a note at this place..."></textarea>
+              <button class="button95" id="commentSubmit">Post Note</button>
+              <div id="commentStatus" class="comment-status"></div>
+            </div>
           </div>
           <div id="passages" style="display:none;"></div>
         </td>
@@ -163,8 +174,27 @@ a { color: #0000cc; }
   padding: 5px 8px;
 }
 
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
 .toolbar button {
   margin: 2px 3px 2px 0;
+}
+
+.token-input {
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 12px;
+  border: 2px inset #808080;
+  padding: 3px 6px;
+  background: #fff;
+  height: 26px;
+  flex: 1;
+  min-width: 0;
+  max-width: 200px;
 }
 
 .layout {
@@ -392,6 +422,73 @@ table.core td {
   display: none;
 }
 
+/* ── Comments ──────────────────────────────────────────────────── */
+
+.comment-list {
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 13px;
+  border: 2px inset #808080;
+  background: #fff;
+  min-height: 40px;
+  max-height: 220px;
+  overflow-y: auto;
+  margin-bottom: 8px;
+  padding: 4px;
+}
+
+.comment-item {
+  border-bottom: 1px solid #e0e0e0;
+  padding: 6px 4px;
+}
+
+.comment-item:last-child {
+  border-bottom: none;
+}
+
+.comment-meta {
+  font-size: 11px;
+  color: #666;
+  margin-bottom: 3px;
+}
+
+.comment-body {
+  font-size: 13px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.comment-empty {
+  color: #888;
+  font-style: italic;
+  padding: 6px 4px;
+  font-size: 12px;
+}
+
+.comment-form {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.comment-textarea {
+  font-family: "Times New Roman", serif;
+  font-size: 14px;
+  border: 2px inset #808080;
+  padding: 5px;
+  resize: vertical;
+  min-height: 60px;
+  background: #fff;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.comment-status {
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 12px;
+  min-height: 16px;
+  color: #000080;
+}
+
 @media (max-width: 760px) {
   table.core, table.core tbody, table.core tr, table.core td {
     display: block;
@@ -409,6 +506,11 @@ table.core td {
   .compass {
     width: 200px;
     height: 200px;
+  }
+
+  .token-input {
+    max-width: 100%;
+    font-size: 16px;
   }
 }
 
@@ -635,12 +737,17 @@ setup.geo.updateActiveByDwell = function () {
 
   if (!v.active || v.active.name !== candidate.name) {
     if (elapsed >= dwellNeeded) {
+      var prevActiveName = v.active ? v.active.name : null;
       v.active        = candidate;
       v.displayedBase = candidate.name;
       v.displayed     = candidate.name;
       v.stageSince    = now;
       if (v.unlocked.indexOf(candidate.name) === -1) {
         v.unlocked.push(candidate.name);
+      }
+      // Load comments when a new passage activates
+      if (prevActiveName !== candidate.name) {
+        setup.geo.comments.load(candidate.name);
       }
     }
   }
@@ -692,10 +799,6 @@ setup.geo.updateDisplayedPassage = function () {
 };
 
 // ── buildVisibleList ───────────────────────────────────────────────────────
-// Shared helper: given an array of geo point objects, compute bearing/relative
-// from current position and return sorted by distance.
-// In pre-active mode (preActive=true) facing threshold is NOT applied —
-// we want ALL points visible so the compass is useful immediately.
 setup.geo.buildVisibleList = function (points, preActive) {
   var v = State.variables.geo;
   return points
@@ -720,24 +823,16 @@ setup.geo.refreshVisible = function () {
   var v = State.variables.geo;
   if (!v.current) { v.visible = []; return; }
 
-  // ── Pre-active mode ───────────────────────────────────────────────────────
-  // No passage has been dwelled into yet. Show Start-linked geo points
-  // (or all geo points if Start has no links) using real bearings.
-  // Facing threshold is deliberately skipped here — we show everything
-  // so the compass is immediately useful the moment GPS locks.
   if (!v.active) {
     var startTargets = setup.geo.getLinkedTargets('Start');
     var allPoints    = setup.geo.points();
     var browsePoints = startTargets.length > 0
       ? allPoints.filter(function (p) { return startTargets.indexOf(p.name) !== -1; })
       : allPoints;
-    v.visible = setup.geo.buildVisibleList(browsePoints, true /* preActive — skip facing filter */);
+    v.visible = setup.geo.buildVisibleList(browsePoints, true);
     return;
   }
 
-  // ── Active mode ───────────────────────────────────────────────────────────
-  // Passage has been dwelled into. Show the geo points linked from active.
-  // Apply facing threshold as normal.
   var linked = setup.geo.getLinkedTargets(v.active.name);
   var linkedPoints = linked
     .filter(function (name) { return name !== v.active.name && Story.has(name); })
@@ -746,19 +841,13 @@ setup.geo.refreshVisible = function () {
 
   var freshList = setup.geo.buildVisibleList(linkedPoints, false);
 
-  // Keep freshList as the new lastLinked whenever it is non-empty,
-  // so we have something to fall back on between passages.
   if (freshList.length > 0) {
     v.lastLinked = freshList;
     v.visible    = freshList;
   } else {
-    // Between passages: freshList is empty (facing threshold filtered everything,
-    // or we stepped out of range). Keep showing the last linked set with stale
-    // bearings updated to current position so markers still track movement.
     if (v.lastLinked && v.lastLinked.length > 0) {
-      // Re-derive bearings/relative from current position so dots move correctly
       var stalePoints = v.lastLinked.map(function (p) { return setup.geo.getPointByName(p.name); }).filter(Boolean);
-      v.visible = setup.geo.buildVisibleList(stalePoints, true /* skip facing filter for stale fallback */);
+      v.visible = setup.geo.buildVisibleList(stalePoints, true);
       v.visible = v.visible.map(function (p) { return Object.assign({}, p, { stale: true }); });
     } else {
       v.visible = [];
@@ -771,6 +860,239 @@ setup.geo.getShownPassage = function () {
   if (!v.displayed || !Story.has(v.displayed)) { return null; }
   return setup.geo.getParsedPassageByName(v.displayed);
 };
+
+// ── Comments via GitHub Issues ─────────────────────────────────────────────
+//
+// Each geo passage gets one GitHub Issue titled "[passage] PassageName".
+// Comments on that issue = field notes left by readers at that location.
+// The issue is created automatically on first post if it doesn't exist.
+// A token with issues:write scope is required to post; read is public.
+//
+setup.geo.comments = (function () {
+  var OWNER  = 'jonathaniscarroll';
+  var REPO   = 'spatial-narrative';
+  var BASE   = 'https://api.github.com/repos/' + OWNER + '/' + REPO;
+  // Cache: passageName -> { issueNumber, comments[] }
+  var cache  = Object.create(null);
+  // Track which passage comments are currently displayed
+  var currentPassage = null;
+
+  function getToken() {
+    var el = document.getElementById('ghTokenInput');
+    return el ? el.value.trim() : '';
+  }
+
+  function issueTitle(passageName) {
+    return '[passage] ' + passageName;
+  }
+
+  // Find existing issue for this passage (searches open+closed)
+  async function findIssue(passageName) {
+    var title   = issueTitle(passageName);
+    var encoded = encodeURIComponent(title + ' repo:' + OWNER + '/' + REPO + ' in:title');
+    var res = await fetch(
+      BASE + '/issues?state=open&labels=geo-comment&per_page=100',
+      { headers: { 'Accept': 'application/vnd.github.v3+json' } }
+    );
+    if (!res.ok) { return null; }
+    var issues = await res.json();
+    var found  = issues.find(function (i) { return i.title === title; });
+    return found ? found.number : null;
+  }
+
+  // Create issue for this passage (requires token)
+  async function createIssue(passageName) {
+    var token = getToken();
+    if (!token) { return null; }
+    var res = await fetch(BASE + '/issues', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'token ' + token,
+        'Accept': 'application/vnd.github.v3+json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        title: issueTitle(passageName),
+        body:  'Field notes left by readers at the geo passage **' + passageName + '**. ' +
+               'Each comment was posted from within the passage radius.',
+        labels: ['geo-comment']
+      })
+    });
+    if (!res.ok) { return null; }
+    var data = await res.json();
+    return data.number;
+  }
+
+  // Get or create issue number (cached)
+  async function ensureIssue(passageName) {
+    if (cache[passageName] && cache[passageName].issueNumber) {
+      return cache[passageName].issueNumber;
+    }
+    var num = await findIssue(passageName);
+    if (!num) { num = await createIssue(passageName); }
+    if (num) {
+      cache[passageName] = cache[passageName] || {};
+      cache[passageName].issueNumber = num;
+    }
+    return num;
+  }
+
+  // Load comments for a passage and render them
+  async function load(passageName) {
+    currentPassage = passageName;
+    var panel  = document.getElementById('commentsPanel');
+    var list   = document.getElementById('commentList');
+    var status = document.getElementById('commentStatus');
+    if (!panel || !list) { return; }
+    panel.style.display = '';
+    list.innerHTML = '<div class="comment-empty">Loading field notes…</div>';
+    if (status) { status.textContent = ''; }
+
+    try {
+      // Try to find an existing issue first (read-only, no token needed)
+      var title = issueTitle(passageName);
+      var res = await fetch(
+        BASE + '/issues?state=open&labels=geo-comment&per_page=100',
+        { headers: { 'Accept': 'application/vnd.github.v3+json' } }
+      );
+      var issueNumber = null;
+      if (res.ok) {
+        var issues = await res.json();
+        var found  = issues.find(function (i) { return i.title === title; });
+        if (found) {
+          issueNumber = found.number;
+          cache[passageName] = cache[passageName] || {};
+          cache[passageName].issueNumber = found.number;
+        }
+      }
+
+      if (!issueNumber) {
+        list.innerHTML = '<div class="comment-empty">No field notes yet. Be the first.</div>';
+        return;
+      }
+
+      var cRes = await fetch(
+        BASE + '/issues/' + issueNumber + '/comments?per_page=100',
+        { headers: { 'Accept': 'application/vnd.github.v3+json' } }
+      );
+      if (!cRes.ok) { throw new Error('HTTP ' + cRes.status); }
+      var comments = await cRes.json();
+      cache[passageName].comments = comments;
+      render(passageName, comments);
+    } catch (e) {
+      list.innerHTML = '<div class="comment-empty">Could not load notes: ' + e.message + '</div>';
+    }
+  }
+
+  // Render comment list
+  function render(passageName, comments) {
+    if (currentPassage !== passageName) { return; } // passage changed while loading
+    var list = document.getElementById('commentList');
+    if (!list) { return; }
+    if (!comments || comments.length === 0) {
+      list.innerHTML = '<div class="comment-empty">No field notes yet. Be the first.</div>';
+      return;
+    }
+    list.innerHTML = '';
+    comments.forEach(function (c) {
+      var item = document.createElement('div');
+      item.className = 'comment-item';
+      var date = new Date(c.created_at);
+      var dateStr = date.toLocaleDateString('en-CA', { year: 'numeric', month: 'short', day: 'numeric' });
+      var meta = document.createElement('div');
+      meta.className = 'comment-meta';
+      meta.textContent = (c.user ? c.user.login : 'anonymous') + ' — ' + dateStr;
+      var body = document.createElement('div');
+      body.className = 'comment-body';
+      body.textContent = c.body;
+      item.appendChild(meta);
+      item.appendChild(body);
+      list.appendChild(item);
+    });
+    // Scroll to bottom to show most recent
+    list.scrollTop = list.scrollHeight;
+  }
+
+  // Post a new comment
+  async function post(passageName, text) {
+    var status  = document.getElementById('commentStatus');
+    var input   = document.getElementById('commentInput');
+    var btn     = document.getElementById('commentSubmit');
+    var token   = getToken();
+
+    if (!token) {
+      if (status) { status.textContent = 'Paste a GitHub token into the token field to post.'; }
+      return;
+    }
+    if (!text || !text.trim()) {
+      if (status) { status.textContent = 'Write something first.'; }
+      return;
+    }
+
+    if (btn) { btn.disabled = true; }
+    if (status) { status.textContent = 'Posting…'; }
+
+    try {
+      var issueNumber = await ensureIssue(passageName);
+      if (!issueNumber) { throw new Error('Could not find or create issue.'); }
+
+      // Append GPS coords to the note as a footer
+      var v      = State.variables.geo;
+      var coords = v.current ? '\n\n---\n*Posted at ' + v.current.lat.toFixed(5) + ', ' + v.current.lng.toFixed(5) + '*' : '';
+
+      var res = await fetch(BASE + '/issues/' + issueNumber + '/comments', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'token ' + token,
+          'Accept': 'application/vnd.github.v3+json',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ body: text.trim() + coords })
+      });
+      if (!res.ok) { var err = await res.json(); throw new Error(err.message || 'HTTP ' + res.status); }
+      if (status) { status.textContent = 'Note posted.'; }
+      if (input)  { input.value = ''; }
+      // Reload comments to show the new one
+      setTimeout(function () { load(passageName); }, 400);
+    } catch (e) {
+      if (status) { status.textContent = 'Failed: ' + e.message; }
+    } finally {
+      if (btn) { btn.disabled = false; }
+    }
+  }
+
+  // Hide the panel (called when no active passage)
+  function hide() {
+    currentPassage = null;
+    var panel = document.getElementById('commentsPanel');
+    if (panel) { panel.style.display = 'none'; }
+  }
+
+  // Bind submit button (idempotent)
+  function bindSubmit() {
+    var btn = document.getElementById('commentSubmit');
+    if (btn && !btn.dataset.commentBound) {
+      btn.dataset.commentBound = '1';
+      btn.addEventListener('click', function () {
+        var v    = State.variables.geo;
+        var name = v.active ? v.active.name : null;
+        var text = (document.getElementById('commentInput') || {}).value || '';
+        if (name) { post(name, text); }
+      });
+      // Also allow Ctrl+Enter in textarea
+      var ta = document.getElementById('commentInput');
+      if (ta) {
+        ta.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+            btn.click();
+          }
+        });
+      }
+    }
+  }
+
+  return { load: load, post: post, hide: hide, render: render, bindSubmit: bindSubmit };
+}());
 
 // ── Render passage (including image and audio) ────────────────────────────
 setup.geo.renderPassage = function () {
@@ -832,6 +1154,7 @@ setup.geo.renderPassage = function () {
   if (v.error) {
     if (statusEl) { statusEl.textContent = v.error; }
     setMedia(null);
+    setup.geo.comments.hide();
     return;
   }
 
@@ -845,6 +1168,7 @@ setup.geo.renderPassage = function () {
     }
     if (statusEl) { statusEl.textContent = 'Candidate passage detected: ' + dwell.name + '. Waiting for dwell time.'; }
     setMedia(null);
+    setup.geo.comments.hide();
     return;
   }
 
@@ -854,6 +1178,7 @@ setup.geo.renderPassage = function () {
     if (bodyEl)   { bodyEl.textContent   = 'This page only shows the active rendered passage, with a live compass pointing toward the linked passages.'; }
     if (statusEl) { statusEl.textContent = 'Waiting for a valid location.'; }
     setMedia(null);
+    setup.geo.comments.hide();
     return;
   }
 
@@ -864,6 +1189,11 @@ setup.geo.renderPassage = function () {
     statusEl.textContent = 'Active geo node: ' + v.active.name + '. Displayed passage: ' + shown.name + '.';
   }
   setMedia(shown);
+
+  // Show comment panel (load is triggered from updateActiveByDwell on first activation)
+  var panel = document.getElementById('commentsPanel');
+  if (panel) { panel.style.display = ''; }
+  setup.geo.comments.bindSubmit();
 };
 
 // ── Render compass ─────────────────────────────────────────────────────────
