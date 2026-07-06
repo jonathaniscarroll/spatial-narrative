@@ -683,10 +683,12 @@ setup.geo.getParsedPassageByName = function (name) {
 
 setup.geo.getLinkedTargets = function (passageName) {
   if (!passageName || !Story.has(passageName)) { return []; }
-  var text   = Story.get(passageName).text;
+  var text    = Story.get(passageName).text;
   var targets = [];
-  var seen   = Object.create(null);
-  var chunks = text.split('');
+  var seen    = Object.create(null);
+  var chunks  = text.split('[[');
+  chunks.slice(1).forEach(function (chunk) {
+    var end = chunk.indexOf(']]');
     if (end === -1) { return; }
     var raw    = chunk.slice(0, end).trim();
     var target = raw;
@@ -866,231 +868,216 @@ setup.geo.getShownPassage = function () {
 // The issue is created automatically on first post if it doesn't exist.
 // A token with issues:write scope is required to post; read is public.
 //
-setup.geo.comments = (function () {
-  var OWNER  = 'jonathaniscarroll';
-  var REPO   = 'spatial-narrative';
-  var BASE   = 'https://api.github.com/repos/' + OWNER + '/' + REPO;
-  // Cache: passageName -> { issueNumber, comments[] }
-  var cache  = Object.create(null);
-  // Track which passage comments are currently displayed
-  var currentPassage = null;
+var _geoCommentsOwner   = 'jonathaniscarroll';
+var _geoCommentsRepo    = 'spatial-narrative';
+var _geoCommentsBase    = 'https://api.github.com/repos/' + _geoCommentsOwner + '/' + _geoCommentsRepo;
+var _geoCommentsCache   = Object.create(null);
+var _geoCurrentPassage  = null;
 
-  function getToken() {
-    var el = document.getElementById('ghTokenInput');
-    return el ? el.value.trim() : '';
+setup.geo.comments = {};
+
+setup.geo.comments._getToken = function () {
+  var el = document.getElementById('ghTokenInput');
+  return el ? el.value.trim() : '';
+};
+
+setup.geo.comments._issueTitle = function (passageName) {
+  return '[passage] ' + passageName;
+};
+
+setup.geo.comments._findIssue = async function (passageName) {
+  var title = setup.geo.comments._issueTitle(passageName);
+  var res = await fetch(
+    _geoCommentsBase + '/issues?state=open&labels=geo-comment&per_page=100',
+    { headers: { 'Accept': 'application/vnd.github.v3+json' } }
+  );
+  if (!res.ok) { return null; }
+  var issues = await res.json();
+  var found  = issues.find(function (i) { return i.title === title; });
+  return found ? found.number : null;
+};
+
+setup.geo.comments._createIssue = async function (passageName) {
+  var token = setup.geo.comments._getToken();
+  if (!token) { return null; }
+  var res = await fetch(_geoCommentsBase + '/issues', {
+    method: 'POST',
+    headers: {
+      'Authorization': 'token ' + token,
+      'Accept': 'application/vnd.github.v3+json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      title: setup.geo.comments._issueTitle(passageName),
+      body:  'Field notes left by readers at the geo passage **' + passageName + '**. ' +
+             'Each comment was posted from within the passage radius.',
+      labels: ['geo-comment']
+    })
+  });
+  if (!res.ok) { return null; }
+  var data = await res.json();
+  return data.number;
+};
+
+setup.geo.comments._ensureIssue = async function (passageName) {
+  if (_geoCommentsCache[passageName] && _geoCommentsCache[passageName].issueNumber) {
+    return _geoCommentsCache[passageName].issueNumber;
   }
-
-  function issueTitle(passageName) {
-    return '[passage] ' + passageName;
+  var num = await setup.geo.comments._findIssue(passageName);
+  if (!num) { num = await setup.geo.comments._createIssue(passageName); }
+  if (num) {
+    _geoCommentsCache[passageName] = _geoCommentsCache[passageName] || {};
+    _geoCommentsCache[passageName].issueNumber = num;
   }
+  return num;
+};
 
-  // Find existing issue for this passage (searches open+closed)
-  async function findIssue(passageName) {
-    var title   = issueTitle(passageName);
-    var encoded = encodeURIComponent(title + ' repo:' + OWNER + '/' + REPO + ' in:title');
+setup.geo.comments.load = async function (passageName) {
+  _geoCurrentPassage = passageName;
+  var panel  = document.getElementById('commentsPanel');
+  var list   = document.getElementById('commentList');
+  var status = document.getElementById('commentStatus');
+  if (!panel || !list) { return; }
+  panel.style.display = '';
+  list.innerHTML = '<div class="comment-empty">Loading field notes\u2026</div>';
+  if (status) { status.textContent = ''; }
+
+  try {
+    var title = setup.geo.comments._issueTitle(passageName);
     var res = await fetch(
-      BASE + '/issues?state=open&labels=geo-comment&per_page=100',
+      _geoCommentsBase + '/issues?state=open&labels=geo-comment&per_page=100',
       { headers: { 'Accept': 'application/vnd.github.v3+json' } }
     );
-    if (!res.ok) { return null; }
-    var issues = await res.json();
-    var found  = issues.find(function (i) { return i.title === title; });
-    return found ? found.number : null;
+    var issueNumber = null;
+    if (res.ok) {
+      var issues = await res.json();
+      var found  = issues.find(function (i) { return i.title === title; });
+      if (found) {
+        issueNumber = found.number;
+        _geoCommentsCache[passageName] = _geoCommentsCache[passageName] || {};
+        _geoCommentsCache[passageName].issueNumber = found.number;
+      }
+    }
+
+    if (!issueNumber) {
+      list.innerHTML = '<div class="comment-empty">No field notes yet. Be the first.</div>';
+      return;
+    }
+
+    var cRes = await fetch(
+      _geoCommentsBase + '/issues/' + issueNumber + '/comments?per_page=100',
+      { headers: { 'Accept': 'application/vnd.github.v3+json' } }
+    );
+    if (!cRes.ok) { throw new Error('HTTP ' + cRes.status); }
+    var comments = await cRes.json();
+    _geoCommentsCache[passageName].comments = comments;
+    setup.geo.comments.render(passageName, comments);
+  } catch (e) {
+    list.innerHTML = '<div class="comment-empty">Could not load notes: ' + e.message + '</div>';
+  }
+};
+
+setup.geo.comments.render = function (passageName, comments) {
+  if (_geoCurrentPassage !== passageName) { return; }
+  var list = document.getElementById('commentList');
+  if (!list) { return; }
+  if (!comments || comments.length === 0) {
+    list.innerHTML = '<div class="comment-empty">No field notes yet. Be the first.</div>';
+    return;
+  }
+  list.innerHTML = '';
+  comments.forEach(function (c) {
+    var item = document.createElement('div');
+    item.className = 'comment-item';
+    var date    = new Date(c.created_at);
+    var dateStr = date.toLocaleDateString('en-CA', { year: 'numeric', month: 'short', day: 'numeric' });
+    var meta = document.createElement('div');
+    meta.className = 'comment-meta';
+    meta.textContent = (c.user ? c.user.login : 'anonymous') + ' \u2014 ' + dateStr;
+    var body = document.createElement('div');
+    body.className = 'comment-body';
+    body.textContent = c.body;
+    item.appendChild(meta);
+    item.appendChild(body);
+    list.appendChild(item);
+  });
+  list.scrollTop = list.scrollHeight;
+};
+
+setup.geo.comments.post = async function (passageName, text) {
+  var status = document.getElementById('commentStatus');
+  var input  = document.getElementById('commentInput');
+  var btn    = document.getElementById('commentSubmit');
+  var token  = setup.geo.comments._getToken();
+
+  if (!token) {
+    if (status) { status.textContent = 'Paste a GitHub token into the token field to post.'; }
+    return;
+  }
+  if (!text || !text.trim()) {
+    if (status) { status.textContent = 'Write something first.'; }
+    return;
   }
 
-  // Create issue for this passage (requires token)
-  async function createIssue(passageName) {
-    var token = getToken();
-    if (!token) { return null; }
-    var res = await fetch(BASE + '/issues', {
+  if (btn) { btn.disabled = true; }
+  if (status) { status.textContent = 'Posting\u2026'; }
+
+  try {
+    var issueNumber = await setup.geo.comments._ensureIssue(passageName);
+    if (!issueNumber) { throw new Error('Could not find or create issue.'); }
+
+    var v      = State.variables.geo;
+    var coords = v.current
+      ? '\n\n---\n*Posted at ' + v.current.lat.toFixed(5) + ', ' + v.current.lng.toFixed(5) + '*'
+      : '';
+
+    var res = await fetch(_geoCommentsBase + '/issues/' + issueNumber + '/comments', {
       method: 'POST',
       headers: {
         'Authorization': 'token ' + token,
         'Accept': 'application/vnd.github.v3+json',
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({
-        title: issueTitle(passageName),
-        body:  'Field notes left by readers at the geo passage **' + passageName + '**. ' +
-               'Each comment was posted from within the passage radius.',
-        labels: ['geo-comment']
-      })
+      body: JSON.stringify({ body: text.trim() + coords })
     });
-    if (!res.ok) { return null; }
-    var data = await res.json();
-    return data.number;
+    if (!res.ok) {
+      var err = await res.json();
+      throw new Error(err.message || 'HTTP ' + res.status);
+    }
+    if (status) { status.textContent = 'Note posted.'; }
+    if (input)  { input.value = ''; }
+    setTimeout(function () { setup.geo.comments.load(passageName); }, 400);
+  } catch (e) {
+    if (status) { status.textContent = 'Failed: ' + e.message; }
+  } finally {
+    if (btn) { btn.disabled = false; }
   }
+};
 
-  // Get or create issue number (cached)
-  async function ensureIssue(passageName) {
-    if (cache[passageName] && cache[passageName].issueNumber) {
-      return cache[passageName].issueNumber;
-    }
-    var num = await findIssue(passageName);
-    if (!num) { num = await createIssue(passageName); }
-    if (num) {
-      cache[passageName] = cache[passageName] || {};
-      cache[passageName].issueNumber = num;
-    }
-    return num;
-  }
+setup.geo.comments.hide = function () {
+  _geoCurrentPassage = null;
+  var panel = document.getElementById('commentsPanel');
+  if (panel) { panel.style.display = 'none'; }
+};
 
-  // Load comments for a passage and render them
-  async function load(passageName) {
-    currentPassage = passageName;
-    var panel  = document.getElementById('commentsPanel');
-    var list   = document.getElementById('commentList');
-    var status = document.getElementById('commentStatus');
-    if (!panel || !list) { return; }
-    panel.style.display = '';
-    list.innerHTML = '<div class="comment-empty">Loading field notes…</div>';
-    if (status) { status.textContent = ''; }
-
-    try {
-      // Try to find an existing issue first (read-only, no token needed)
-      var title = issueTitle(passageName);
-      var res = await fetch(
-        BASE + '/issues?state=open&labels=geo-comment&per_page=100',
-        { headers: { 'Accept': 'application/vnd.github.v3+json' } }
-      );
-      var issueNumber = null;
-      if (res.ok) {
-        var issues = await res.json();
-        var found  = issues.find(function (i) { return i.title === title; });
-        if (found) {
-          issueNumber = found.number;
-          cache[passageName] = cache[passageName] || {};
-          cache[passageName].issueNumber = found.number;
-        }
-      }
-
-      if (!issueNumber) {
-        list.innerHTML = '<div class="comment-empty">No field notes yet. Be the first.</div>';
-        return;
-      }
-
-      var cRes = await fetch(
-        BASE + '/issues/' + issueNumber + '/comments?per_page=100',
-        { headers: { 'Accept': 'application/vnd.github.v3+json' } }
-      );
-      if (!cRes.ok) { throw new Error('HTTP ' + cRes.status); }
-      var comments = await cRes.json();
-      cache[passageName].comments = comments;
-      render(passageName, comments);
-    } catch (e) {
-      list.innerHTML = '<div class="comment-empty">Could not load notes: ' + e.message + '</div>';
-    }
-  }
-
-  // Render comment list
-  function render(passageName, comments) {
-    if (currentPassage !== passageName) { return; } // passage changed while loading
-    var list = document.getElementById('commentList');
-    if (!list) { return; }
-    if (!comments || comments.length === 0) {
-      list.innerHTML = '<div class="comment-empty">No field notes yet. Be the first.</div>';
-      return;
-    }
-    list.innerHTML = '';
-    comments.forEach(function (c) {
-      var item = document.createElement('div');
-      item.className = 'comment-item';
-      var date = new Date(c.created_at);
-      var dateStr = date.toLocaleDateString('en-CA', { year: 'numeric', month: 'short', day: 'numeric' });
-      var meta = document.createElement('div');
-      meta.className = 'comment-meta';
-      meta.textContent = (c.user ? c.user.login : 'anonymous') + ' — ' + dateStr;
-      var body = document.createElement('div');
-      body.className = 'comment-body';
-      body.textContent = c.body;
-      item.appendChild(meta);
-      item.appendChild(body);
-      list.appendChild(item);
+setup.geo.comments.bindSubmit = function () {
+  var btn = document.getElementById('commentSubmit');
+  if (btn && !btn.dataset.commentBound) {
+    btn.dataset.commentBound = '1';
+    btn.addEventListener('click', function () {
+      var v    = State.variables.geo;
+      var name = v.active ? v.active.name : null;
+      var text = (document.getElementById('commentInput') || {}).value || '';
+      if (name) { setup.geo.comments.post(name, text); }
     });
-    // Scroll to bottom to show most recent
-    list.scrollTop = list.scrollHeight;
-  }
-
-  // Post a new comment
-  async function post(passageName, text) {
-    var status  = document.getElementById('commentStatus');
-    var input   = document.getElementById('commentInput');
-    var btn     = document.getElementById('commentSubmit');
-    var token   = getToken();
-
-    if (!token) {
-      if (status) { status.textContent = 'Paste a GitHub token into the token field to post.'; }
-      return;
-    }
-    if (!text || !text.trim()) {
-      if (status) { status.textContent = 'Write something first.'; }
-      return;
-    }
-
-    if (btn) { btn.disabled = true; }
-    if (status) { status.textContent = 'Posting…'; }
-
-    try {
-      var issueNumber = await ensureIssue(passageName);
-      if (!issueNumber) { throw new Error('Could not find or create issue.'); }
-
-      // Append GPS coords to the note as a footer
-      var v      = State.variables.geo;
-      var coords = v.current ? '\n\n---\n*Posted at ' + v.current.lat.toFixed(5) + ', ' + v.current.lng.toFixed(5) + '*' : '';
-
-      var res = await fetch(BASE + '/issues/' + issueNumber + '/comments', {
-        method: 'POST',
-        headers: {
-          'Authorization': 'token ' + token,
-          'Accept': 'application/vnd.github.v3+json',
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ body: text.trim() + coords })
+    var ta = document.getElementById('commentInput');
+    if (ta) {
+      ta.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { btn.click(); }
       });
-      if (!res.ok) { var err = await res.json(); throw new Error(err.message || 'HTTP ' + res.status); }
-      if (status) { status.textContent = 'Note posted.'; }
-      if (input)  { input.value = ''; }
-      // Reload comments to show the new one
-      setTimeout(function () { load(passageName); }, 400);
-    } catch (e) {
-      if (status) { status.textContent = 'Failed: ' + e.message; }
-    } finally {
-      if (btn) { btn.disabled = false; }
     }
   }
-
-  // Hide the panel (called when no active passage)
-  function hide() {
-    currentPassage = null;
-    var panel = document.getElementById('commentsPanel');
-    if (panel) { panel.style.display = 'none'; }
-  }
-
-  // Bind submit button (idempotent)
-  function bindSubmit() {
-    var btn = document.getElementById('commentSubmit');
-    if (btn && !btn.dataset.commentBound) {
-      btn.dataset.commentBound = '1';
-      btn.addEventListener('click', function () {
-        var v    = State.variables.geo;
-        var name = v.active ? v.active.name : null;
-        var text = (document.getElementById('commentInput') || {}).value || '';
-        if (name) { post(name, text); }
-      });
-      // Also allow Ctrl+Enter in textarea
-      var ta = document.getElementById('commentInput');
-      if (ta) {
-        ta.addEventListener('keydown', function (e) {
-          if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-            btn.click();
-          }
-        });
-      }
-    }
-  }
-
-  return { load: load, post: post, hide: hide, render: render, bindSubmit: bindSubmit };
-}());
+};
 
 // ── Render passage (including image and audio) ────────────────────────────
 setup.geo.renderPassage = function () {
@@ -1371,10 +1358,6 @@ $(document).on(':passagerender', function () {
   setup.geo.startHeartbeat();
   setup.geo.refresh();
 });
-
-[[');
-  chunks.slice(1).forEach(function (chunk) {
-    var end = chunk.indexOf(']]
 
 :: Start
 
