@@ -687,7 +687,35 @@ setup.geo.updateDisplayedPassage = function () {
 
 setup.geo.refreshVisible = function () {
   var v = State.variables.geo;
-  if (!v.current || !v.active) { v.visible = []; return; }
+  if (!v.current) { v.visible = []; return; }
+
+  // ── Pre-active browse mode: use real bearings from current position ───────
+  // When there is no active passage yet, populate visible from all geo points
+  // (or just Start-linked ones) so the compass markers move as soon as GPS locks.
+  if (!v.active) {
+    var startTargets = setup.geo.getLinkedTargets('Start');
+    var allPoints    = setup.geo.points();
+    var browsePoints = startTargets.length > 0
+      ? allPoints.filter(function (p) { return startTargets.indexOf(p.name) !== -1; })
+      : allPoints;
+
+    v.visible = browsePoints.map(function (p) {
+      var distance   = setup.geo.distance(v.current.lat, v.current.lng, p.lat, p.lng);
+      var bearing    = setup.geo.bearing(v.current.lat, v.current.lng, p.lat, p.lng);
+      var relative   = v.heading == null ? bearing : setup.geo.normalize(bearing - v.heading);
+      var threshold  = Number.isFinite(p.facing) ? p.facing : v.headingThreshold;
+      var facingDelta = v.heading == null ? 0 : setup.geo.angleDelta(v.heading, bearing);
+      var facingOk   = v.heading == null ? true : facingDelta <= threshold;
+      return Object.assign({}, p, {
+        distance: distance, bearing: bearing,
+        relative: relative, threshold: threshold,
+        facingDelta: facingDelta, facingOk: facingOk
+      });
+    })
+    .filter(function (p) { return p.facingOk; })
+    .sort(function (a, b) { return a.distance - b.distance; });
+    return;
+  }
 
   var linked = setup.geo.getLinkedTargets(v.active.name);
   v.visible = linked
@@ -813,8 +841,6 @@ setup.geo.renderPassage = function () {
 };
 
 // ── Render compass ─────────────────────────────────────────────────────────
-// When no active passage, fall back to showing all geo points linked from
-// the Start passage so authors can see the full map of nodes on load.
 setup.geo.renderCompass = function () {
   var list    = document.getElementById('targets');
   var compass = document.getElementById('compass');
@@ -827,59 +853,15 @@ setup.geo.renderCompass = function () {
   Array.from(compass.querySelectorAll('.marker')).forEach(function (el) { el.remove(); });
   arrow.style.transform = 'rotate(' + (v.heading == null ? 0 : v.heading) + 'deg)';
 
-  // ── Browse mode: no active passage — show all geo nodes linked from Start ──
-  if (!v.active) {
-    var startTargets = setup.geo.getLinkedTargets('Start');
-    var allPoints    = setup.geo.points();
-    // If Start has explicit links, filter to those; otherwise show everything
-    var browsePoints = startTargets.length > 0
-      ? allPoints.filter(function (p) { return startTargets.indexOf(p.name) !== -1; })
-      : allPoints;
-
-    if (browsePoints.length === 0) {
-      var liNone = document.createElement('li');
-      liNone.className = 'gated';
-      liNone.textContent = 'No geo passages found. Add [[PassageName]] links to Start to list them here.';
-      list.appendChild(liNone);
-      return;
-    }
-
-    browsePoints.forEach(function (p, i) {
-      var li   = document.createElement('li');
-      var link = document.createElement('a');
-      link.href = 'javascript:void(0)';
-      link.textContent = p.name;
-      link.addEventListener('click', function () { Engine.play(p.name); });
-      li.appendChild(link);
-      var coordStr = p.lat.toFixed(5) + ', ' + p.lng.toFixed(5);
-      li.innerHTML += '<br><span style="color:#666;font-size:11px;">' + coordStr + ' · r=' + p.radius + 'm</span>';
-      list.appendChild(li);
-
-      // Show marker dots at fixed positions around compass edge (no bearing without position)
-      var angle  = (i / browsePoints.length) * 360;
-      var marker = document.createElement('div');
-      marker.className = 'marker';
-      marker.style.transform = 'rotate(' + angle + 'deg)';
-      marker.innerHTML = '<div class="line"></div><div class="dot"></div>';
-      compass.appendChild(marker);
-    });
-
+  // ── Compass markers: always driven by v.visible bearings ──────────────────
+  if (!v.current || v.visible.length === 0) {
     var liInfo = document.createElement('li');
     liInfo.className = 'gated';
     liInfo.style.marginTop = '8px';
-    liInfo.textContent = '— Browse mode. Start GPS to activate proximity.';
+    liInfo.textContent = v.current
+      ? 'No passages currently within heading threshold.'
+      : 'Start GPS to activate proximity.';
     list.appendChild(liInfo);
-    return;
-  }
-
-  // ── Normal mode: active passage, show linked visible targets ──────────────
-  if (!v.current) { return; }
-
-  if (v.visible.length === 0) {
-    var liEmpty = document.createElement('li');
-    liEmpty.className = 'gated';
-    liEmpty.textContent = 'No linked passages currently within heading threshold.';
-    list.appendChild(liEmpty);
     return;
   }
 
