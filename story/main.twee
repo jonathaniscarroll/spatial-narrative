@@ -1687,11 +1687,13 @@ The fortification and the academy share a sightline. One was built to command th
 Clue collected: the hilltop was here first.
 
 :: Academy_east
-@lede Facing east: the fire escape is visible. That is your next objective.
+@lede world trade convention centre
 
-Iron brackets against pale brick. Count the landings — there are three. The middle one has a propped door, which means someone is still inside, or just left.
+The view of the harbour completely blocked by looming glass.
 
-The compass bearing to Academy_SideEast is northeast. Move when ready.
+The rooftop of the adjacent building - pigeon home, non-human space.
+
+[[Academy_east_WorldTradeCentre]]
 
 :: Academy_south
 @lede Facing south: the street is a moat.
@@ -1812,3 +1814,5 @@ This is where the building's public sentence begins — or ends, depending on yo
 The lane stretches toward the fire escape. The circuit is visible as a single sightline: three checkpoints, receding. The building wraps around you now as a known quantity.
 
 :: Academy_west_3crows
+
+:: Academy_east_WorldTradeCentre
