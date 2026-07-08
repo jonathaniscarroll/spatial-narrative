@@ -1365,7 +1365,7 @@ $(document).on(':passagerender', function () {
 
 You are standing inside a geolocated SugarCube story.
 
-The body text is controlled by the nearest resolved geo passage. Links below connect geo nodes to this Start passage — they appear in the compass panel on load so you can see all your nodes before starting GPS.
+The body text is controlled by the nearest resolved geo passage. Links below connect geo nodes to this Start passage -- they appear in the compass panel on load so you can see all your nodes before starting GPS.
 
 [[FerryTerminal]]
 [[ClockTower]]
@@ -1381,6 +1381,7 @@ The body text is controlled by the nearest resolved geo passage. Links below con
 [[G8_Harbourfront]]
 [[G8_CitadelLookout]]
 [[G8_RoutePoint]]
+[[Academy]]
 
 :: FerryTerminal [geo harbour]
 @geo 44.648800,-63.575200,45
@@ -1655,30 +1656,111 @@ This is where palula lives
 
 :: Academy [geo]
 @geo 44.646000,-63.576046,5
-@dwell 12000
-@after 5000
-@then Academy-FireEscape-2
-@dir 45-135:Academy-FireEscape-North
-@dir 135-225:Academy-FireEscape-East
-@dir 225-315:Academy-FireEscape-South
-@dir 315-45:Academy-FireEscape-West
+@lede Front threshold -- the building holds the hill behind it.
+@dwell 8000
+@after 10000
+@then Academy_late
+@dir 315-45:Academy_north
+@dir 45-135:Academy_east
+@dir 135-225:Academy_south
+@dir 225-315:Academy_west
 
-From here, you can see the gleam of towers and the green of the hill, the blue of the sky and the white of the clock tower.
+The entrance reads as institution: brick and stone, steps worn shallow from years of approach. From here the Citadel dominates the skyline north, and the building becomes one layer in a stack of imposed structure.
 
-[[citadel1]]
+[[Academy_SideEast]]
+[[Academy_FrontWest]]
 
-:: Academy-FireEscape-North
+:: Academy_late
+@lede The threshold deepens into duration.
 
-Looking north between the buildings. Blue backdrop, green bridge foreground, Dartmouth glimpsed
+Standing here long enough, the building stops being backdrop. The rhythm of the entrance -- door, step, pause -- becomes legible as a designed pressure.
 
-:: Academy-FireEscape-East
+:: Academy_north
+@lede Facing uphill -- Citadel Hill frames the building from above.
 
-Do you want to go back inside now? Did the door lock behind you? Is the block holding it open for you? Are your friends done smoking? Back to work?
+The hilltop fortification and the institution below it are part of the same grammar: command, elevation, display. The academy sits where civic authority begins to be schooled.
 
-[[Academy_FireEscape-East-2]]
+:: Academy_east
+@lede Facing east along the building's flank.
 
-:: Academy_FireEscape-East-2 [geo]
+The facade gives way to brick and downpipe. A fire escape brackets the corner -- the building's emergency exit made visible as sculpture. Head that way.
+
+:: Academy_south
+@lede Facing south toward the street.
+
+The street is a frame. Pedestrians and cars and the grid of the city, held at one storey's distance from the institution's front face.
+
+:: Academy_west
+@lede Facing west -- the shorter flank.
+
+The roof cornice carries across the west face at a single unbroken height. Nothing decorative. Pure institutional register.
+
+:: Academy_SideEast [geo]
 @geo 44.645952,-63.576180,5
-@dwell 12000
+@lede The fire escape -- iron over brick, emergency as architecture.
+@dwell 8000
+@after 8000
+@then Academy_SideEast_late
+@dir 315-45:Academy_SideEast_north
+@dir 225-315:Academy_SideEast_west
 
-Each metal footfall echoes across the ages.
+The metal structure brackets the east corner. Each landing is a stage; each rung a decision about how quickly to descend. Propped doors. The smell of outside air when inside work has gone on too long.
+
+[[Academy_BackLane]]
+
+:: Academy_SideEast_late
+@lede The fire escape settles into ordinariness.
+
+Visited enough times in enough weathers, it becomes furniture. A place to stand that is neither in nor out, a holding zone between session and session.
+
+:: Academy_SideEast_north
+@lede Facing north up the alley between buildings.
+
+The passage between walls amplifies every sound: a trolley, a distant door, rain on metal. The alley is the building's true outside -- undesigned and therefore honest.
+
+:: Academy_SideEast_west
+@lede Facing back toward the front of the building.
+
+The full length of the east flank reads in one sightline. Brick courses, window regularity, the logic of a building that was planned to be looked at from the front and used from the sides.
+
+:: Academy_BackLane [geo]
+@geo 44.646080,-63.576200,5
+@lede The lane behind -- service, infrastructure, undecorated use.
+@dwell 8000
+@dir 45-135:Academy_BackLane_east
+@dir 225-315:Academy_BackLane_west
+
+The rear of the institution. Deliveries, waste, HVAC exhaust, cables. Here the building admits what it needs to function: loading bay, ventilation, the practical maintenance of the educational front.
+
+[[Academy_FrontWest]]
+
+:: Academy_BackLane_east
+@lede Facing back toward the fire escape corner.
+
+The east corner aligns with the lane's far end. A frame. The fire escape reads as a formal element from this distance -- the emergency exit as ornament.
+
+:: Academy_BackLane_west
+@lede Facing west along the back.
+
+Service door, dumpster enclosure, a pipe that runs the full height of the wall. The west end of the lane opens onto the street where the building pretends not to have a back.
+
+:: Academy_FrontWest [geo]
+@geo 44.646060,-63.575920,5
+@lede The west corner -- where the lane rejoins the public face.
+@dwell 6000
+@dir 135-225:Academy_FrontWest_south
+@dir 45-135:Academy_FrontWest_east
+
+The building's two registers meet at this corner: the attended front and the working back. A single step turns the walk from maintenance to presentation.
+
+[[Academy]]
+
+:: Academy_FrontWest_south
+@lede Facing south -- the corner opens toward the street.
+
+The west flank ends here. From the footpath, the building's front begins its public address. The corner is a grammatical mark: the institution's sentence starts here.
+
+:: Academy_FrontWest_east
+@lede Facing back east along the rear lane.
+
+The lane stretches toward the fire escape. A closed loop, completed. The building has been circumnavigated; it now fits a body's knowledge.
