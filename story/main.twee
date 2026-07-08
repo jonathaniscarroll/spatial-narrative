@@ -1701,11 +1701,14 @@ The building holds its ground above the pavement. Traffic and pedestrians move b
 Hold this facing for five seconds. The second stage reveals what the entrance is really guarding.
 
 :: Academy_west
-@lede Facing west: the shorter flank, undecorated.
+@lede Citadel hill, Brunswick street. Tree
 
-No windows on this side. No doors. Pure wall. The building shows you nothing facing west — and that refusal is a kind of information.
+The large tree sits in the foreground against the hill and busy traffic on Brunswick street, there are three crows inside the tree.
 
-Turn back. There is nothing to collect here. The route continues east.
+The hill is topped by the masts of ships.
+
+[[Academy_west_3crows]]
+[[citadel1]]
 
 :: Academy_SideEast [geo]
 @geo 44.645930,-63.576196,5
@@ -1807,3 +1810,5 @@ This is where the building's public sentence begins — or ends, depending on yo
 @lede Facing back east along the rear lane.
 
 The lane stretches toward the fire escape. The circuit is visible as a single sightline: three checkpoints, receding. The building wraps around you now as a known quantity.
+
+:: Academy_west_3crows
