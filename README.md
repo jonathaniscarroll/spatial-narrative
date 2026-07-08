@@ -205,13 +205,21 @@ A standalone HTML file — no build step, no server.
 1. Paste a GitHub Personal Access Token (repo scope) into the token field
 2. Click **Load** — parses the live file and places markers on the map
 3. **Click the map** to place a new geo passage (name it in the popup)
-4. **Click a marker** to select and edit a passage in the Editor tab
-5. **Drag a marker** to reposition (lat/lng update live)
-6. Edit fields in the Editor tab
-7. **Linked Passages field** — tap passage buttons under "Add Link" to add `[[links]]`; tap ✕ on a chip to remove one. Changes write immediately to the passage data.
-8. Click **Apply Changes** to commit prose/field edits, then add a commit message and click **Save**
+4. **Click New Passage** in the toolbar to create any passage without a map location — directional variants (`PlaceName_north`), stage-two passages (`PlaceName_late`), or any non-geo passage. Leave the `geo` tag out of the tags field.
+5. **Click a marker** to select and edit a geo passage in the Editor tab
+6. **Drag a marker** to reposition (lat/lng update live)
+7. Edit fields in the Editor tab
+8. **Linked Passages field** — tap passage buttons under "Add Link" to add `[[links]]`; tap ✕ on a chip to remove one. Changes write immediately to the passage data.
+9. Click **Apply Changes** to commit prose/field edits, then add a commit message and click **Save**
 
 > **Important:** The **Linked Passages** field is separate from Body Text. Links added here serialise as `[[Name]]` lines in the `.twee` output and are what the compass reads at runtime. Do not manually type `[[links]]` in the body textarea — use the Add Link buttons.
+
+### Two ways to create a passage
+
+| Method | Use when |
+|---|---|
+| **Click the map** | Placing a new geo node at a real-world location |
+| **New Passage button** (toolbar) | Creating directional variants (`_north`, `_east`), stage-two passages (`_late`), `Start`-index entries, or any passage with no geographic coordinates |
 
 ### Tabs
 - **Passages** — searchable list of all passages; click to select
@@ -281,6 +289,7 @@ Place images and audio in the `media/` directory. Reference by filename only:
 ## Changelog
 
 ### July 2026
+- **Authoring tool:** **New Passage button** in toolbar — creates any passage without requiring a map click; supports non-geo passages (directional variants, stage-two passages, etc.) with an optional tags field; opens a Win95-style modal dialog; Esc/Enter keyboard shortcuts and backdrop-click to dismiss
 - **Authoring tool:** Dedicated **Linked Passages** field with chip UI — links serialised as `[[Name]]` lines, separated from prose body; `parseTwee` extracts existing `[[links]]` from body on load; `applyEdits` migrates any inline `[[links]]` typed in body textarea into the links array automatically
 - **Compass pre-active mode:** `refreshVisible` populates `v.visible` from Start-linked geo points using real GPS bearings as soon as position locks, facing threshold skipped so all nodes appear immediately
 - **Compass stale fallback:** `v.lastLinked` persists the last active linked set; between passages the compass shows these in grey with live-updated bearings so markers never freeze

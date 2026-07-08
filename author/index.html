@@ -452,6 +452,71 @@ body {
   gap: 4px;
   margin-top: 2px;
 }
+
+/* New Passage dialog overlay */
+#newPassageOverlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0,0,0,0.45);
+  align-items: center;
+  justify-content: center;
+}
+#newPassageOverlay.open { display: flex; }
+#newPassageDialog {
+  background: var(--panel);
+  border-top: 2px solid var(--border-light);
+  border-left: 2px solid var(--border-light);
+  border-right: 2px solid var(--border-dark);
+  border-bottom: 2px solid var(--border-dark);
+  min-width: 280px;
+  max-width: 96vw;
+  padding: 0;
+  box-shadow: 4px 4px 0 #000;
+}
+#newPassageDialog .dialog-title {
+  background: linear-gradient(90deg, var(--navy), #1084d0);
+  color: #fff;
+  font-weight: bold;
+  font-size: 13px;
+  padding: 6px 10px;
+}
+#newPassageDialog .dialog-body {
+  padding: 14px 14px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+#newPassageDialog label {
+  font-size: 12px;
+  font-weight: bold;
+  text-transform: uppercase;
+  display: block;
+  margin-bottom: 3px;
+}
+#newPassageDialog input[type="text"] {
+  width: 100%;
+  border: 2px inset var(--border-mid);
+  padding: 6px 8px;
+  font-size: 15px;
+  font-family: "Times New Roman", serif;
+  background: #fff;
+  -webkit-appearance: none;
+  border-radius: 0;
+}
+#newPassageDialog .hint {
+  font-size: 11px;
+  color: #555;
+  font-style: italic;
+  margin-top: 2px;
+}
+#newPassageDialog .dialog-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  padding: 0 14px 12px;
+}
 </style>
 </head>
 <body>
@@ -469,6 +534,9 @@ body {
   <button class="btn primary" id="saveBtn" title="Save to GitHub">
     <span class="btn-icon">💾</span><span class="btn-label">Save</span>
   </button>
+  <button class="btn" id="newPassageBtn" title="Create a new passage (no map placement required)">
+    <span class="btn-icon">✚</span><span class="btn-label">New Passage</span>
+  </button>
   <button class="btn danger" id="deleteBtn" title="Delete selected passage">
     <span class="btn-icon">🗑</span><span class="btn-label">Delete</span>
   </button>
@@ -476,6 +544,28 @@ body {
 </div>
 
 <div id="noticeArea"></div>
+
+<!-- New Passage dialog -->
+<div id="newPassageOverlay">
+  <div id="newPassageDialog">
+    <div class="dialog-title">New Passage</div>
+    <div class="dialog-body">
+      <div>
+        <label for="npName">Passage Name</label>
+        <input type="text" id="npName" placeholder="e.g. FerryTerminal_north" autocorrect="off" autocapitalize="off" spellcheck="false">
+      </div>
+      <div>
+        <label for="npTags">Tags <span style="font-weight:normal;text-transform:none;">(space separated, optional)</span></label>
+        <input type="text" id="npTags" placeholder="e.g. geo  — leave blank for a non-geo passage" autocorrect="off" autocapitalize="off" spellcheck="false">
+        <span class="hint">Omit <code>geo</code> for directional variants, stage-two passages, and any passage without a map location.</span>
+      </div>
+    </div>
+    <div class="dialog-actions">
+      <button class="btn" id="npCancelBtn">Cancel</button>
+      <button class="btn primary" id="npCreateBtn">Create</button>
+    </div>
+  </div>
+</div>
 
 <div class="main">
   <div id="map"></div>
@@ -495,7 +585,7 @@ body {
 
     <div class="tab-content" id="tab-editor">
       <div class="editor-panel" id="editorPanel">
-        <div class="notice">Tap anywhere on the map to place a new geo passage, or select an existing marker.</div>
+        <div class="notice">Tap anywhere on the map to place a new geo passage, or use <strong>New Passage</strong> in the toolbar for passages without a map location (directional variants, stage-two passages, etc.).</div>
       </div>
     </div>
 
@@ -522,7 +612,7 @@ body {
 </nav>
 
 <div class="statusbar">
-  <span id="statusText">Load story/main.twee to begin. Click the map to add a passage.</span>
+  <span id="statusText">Load story/main.twee to begin. Click the map to add a geo passage, or use New Passage for non-geo passages.</span>
   <span id="passageCount"></span>
 </div>
 
@@ -609,6 +699,55 @@ map.on('click', function(e) {
     if (ev.key === 'Enter') container.querySelector('#popupCreate').click();
     if (ev.key === 'Escape') container.querySelector('#popupCancel').click();
   });
+});
+
+// ── New Passage dialog (toolbar button) ───────────────────────────────────
+function openNewPassageDialog() {
+  const overlay = document.getElementById('newPassageOverlay');
+  document.getElementById('npName').value = '';
+  document.getElementById('npTags').value = '';
+  overlay.classList.add('open');
+  setTimeout(() => document.getElementById('npName').focus(), 50);
+}
+function closeNewPassageDialog() {
+  document.getElementById('newPassageOverlay').classList.remove('open');
+}
+function createNewPassage() {
+  const nameInput = document.getElementById('npName');
+  const name = nameInput.value.trim();
+  if (!name) { nameInput.style.outline = '2px solid red'; nameInput.focus(); return; }
+  nameInput.style.outline = '';
+  const rawTags = document.getElementById('npTags').value.trim();
+  const tags = rawTags ? rawTags.split(/\s+/).filter(Boolean) : [];
+  const isGeo = tags.includes('geo');
+  passages.push({
+    name,
+    tags,
+    lat: isGeo ? null : null,
+    lng: isGeo ? null : null,
+    radius: isGeo ? 20 : null,
+    lede: '',
+    dwell: isGeo ? 12000 : null,
+    after: null, then: null, facing: null,
+    dirs: [], links: [], body: ''
+  });
+  closeNewPassageDialog();
+  const i = passages.length - 1;
+  buildMarkers();
+  renderPassageList('');
+  selectPassage(i);
+  setStatus('Created passage "' + name + '"' + (isGeo ? ' (geo, no coordinates yet — set lat/lng in the Editor).' : ' (non-geo).'));
+}
+
+document.getElementById('newPassageBtn').addEventListener('click', openNewPassageDialog);
+document.getElementById('npCreateBtn').addEventListener('click', createNewPassage);
+document.getElementById('npCancelBtn').addEventListener('click', closeNewPassageDialog);
+document.getElementById('newPassageOverlay').addEventListener('click', function(e) {
+  if (e.target === this) closeNewPassageDialog();
+});
+document.getElementById('newPassageDialog').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') createNewPassage();
+  if (e.key === 'Escape') closeNewPassageDialog();
 });
 
 // ── Parse [[links]] out of body text into a separate array ────────────────
@@ -749,8 +888,6 @@ function selectPassage(i) {
 }
 
 // ── Render the links chips UI ──────────────────────────────────────────────
-// Reads from passages[selectedIndex].links and renders chip buttons.
-// Removing a chip immediately writes back to the passage and refreshes raw.
 function renderLinkChips() {
   const p = passages[selectedIndex];
   const container = document.getElementById('linkChips');
