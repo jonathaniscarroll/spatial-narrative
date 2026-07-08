@@ -1696,11 +1696,12 @@ The rooftop of the adjacent building - pigeon home, non-human space.
 [[Academy_east_WorldTradeCentre]]
 
 :: Academy_south
-@lede Facing south: the street is a moat.
+@lede Back inside
 
-The building holds its ground above the pavement. Traffic and pedestrians move below the institution's sightline. You are on the threshold between public and semi-public.
+Did you place the cinderblock against the door?
+If so, you may re-enter the building.
 
-Hold this facing for five seconds. The second stage reveals what the entrance is really guarding.
+[[Academy_south_Re-enter]]
 
 :: Academy_west
 @lede Citadel hill, Brunswick street. Tree
@@ -1816,3 +1817,5 @@ The lane stretches toward the fire escape. The circuit is visible as a single si
 :: Academy_west_3crows
 
 :: Academy_east_WorldTradeCentre
+
+:: Academy_south_Re-enter
