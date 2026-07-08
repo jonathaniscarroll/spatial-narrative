@@ -686,7 +686,9 @@ setup.geo.getLinkedTargets = function (passageName) {
   var text    = Story.get(passageName).text;
   var targets = [];
   var seen    = Object.create(null);
-  var chunks  = text.split('');
+  var chunks  = text.split('[[');
+  chunks.slice(1).forEach(function (chunk) {
+    var end = chunk.indexOf(']]');
     if (end === -1) { return; }
     var raw    = chunk.slice(0, end).trim();
     var target = raw;
@@ -1356,10 +1358,6 @@ $(document).on(':passagerender', function () {
   setup.geo.startHeartbeat();
   setup.geo.refresh();
 });
-
-[[');
-  chunks.slice(1).forEach(function (chunk) {
-    var end = chunk.indexOf(']]
 
 :: Start
 
