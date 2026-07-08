@@ -1656,7 +1656,7 @@ This is where palula lives
 
 :: Academy [geo]
 @geo 44.646000,-63.576046,5
-@lede Front entrance. Something is watching from the upper windows.
+@lede Top of the fire escape stairs
 @dwell 8000
 @after 10000
 @then Academy_late
@@ -1664,8 +1664,6 @@ This is where palula lives
 @dir 135-225:Academy_south
 @dir 225-315:Academy_west
 @dir 315-45:Academy_north
-
-You've found the first node. The building does not announce itself — it simply waits.
 
 Stop here. Don't move. The door counts seconds.
 
