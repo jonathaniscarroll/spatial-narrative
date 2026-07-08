@@ -1777,7 +1777,7 @@ A dumpster enclosure, a pipe that runs full-height, and at the far end, the stre
 Final node is to your west-northwest. The compass will confirm.
 
 :: Academy_FrontWest [geo]
-@geo 44.645926,-63.575939,5
+@geo 44.645804,-63.576261,5
 @lede Checkpoint 4 of 4. The circuit closes here.
 @dwell 6000
 @after 8000
