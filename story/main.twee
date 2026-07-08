@@ -1669,7 +1669,6 @@ You've found the first node. The building does not announce itself — it simply
 
 Stop here. Don't move. The door counts seconds.
 
-Three brass numbers above the lintel. Note them.
 The compass is live: your next checkpoint is already marked.
 
 [[Academy_SideEast]]
@@ -1748,7 +1747,7 @@ The full length of the east flank is visible from here. Thirty-two windows. Coun
 The building has a before and an after. You are in the after.
 
 :: Academy_BackLane [geo]
-@geo 44.645788,-63.576035,5
+@geo 44.645708,-63.575993,5
 @lede Checkpoint 3 of 4. The rear of the building. No public face here.
 @dwell 8000
 @dir 45-135:Academy_BackLane_east
