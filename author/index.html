@@ -276,17 +276,31 @@ body {
   gap: 4px;
   align-items: center;
 }
-.dir-rule input {
+.dir-rule input[type="number"] {
   width: 60px;
   border: 2px inset var(--border-mid);
   padding: 3px 5px;
   font-size: 16px;
   background: #fff;
+  flex-shrink: 0;
 }
 @media (min-width: 601px) {
-  .dir-rule input { font-size: 12px; }
+  .dir-rule input[type="number"] { font-size: 12px; }
 }
-.dir-rule input.target { flex: 1; width: auto; }
+.dir-rule select.target {
+  flex: 1;
+  min-width: 0;
+  border: 2px inset var(--border-mid);
+  padding: 3px 5px;
+  font-size: 16px;
+  font-family: Arial, sans-serif;
+  background: #fff;
+  -webkit-appearance: none;
+  border-radius: 0;
+}
+@media (min-width: 601px) {
+  .dir-rule select.target { font-size: 12px; }
+}
 .dir-rule .remove-dir {
   background: var(--panel);
   border-top: 2px solid var(--border-light);
@@ -298,6 +312,7 @@ body {
   font-size: 14px;
   color: #cc0000;
   min-height: 36px;
+  flex-shrink: 0;
 }
 
 .tab-bar {
@@ -702,16 +717,37 @@ map.on('click', function(e) {
 });
 
 // ── New Passage dialog (toolbar button) ───────────────────────────────────
-function openNewPassageDialog() {
+function openNewPassageDialog(prefillName, prefillTags) {
   const overlay = document.getElementById('newPassageOverlay');
-  document.getElementById('npName').value = '';
-  document.getElementById('npTags').value = '';
+  document.getElementById('npName').value = prefillName || '';
+  document.getElementById('npTags').value = prefillTags || '';
   overlay.classList.add('open');
   setTimeout(() => document.getElementById('npName').focus(), 50);
 }
 function closeNewPassageDialog() {
   document.getElementById('newPassageOverlay').classList.remove('open');
 }
+
+// Creates a new passage and returns its index. Used by toolbar button and
+// inline "New passage…" select handlers.
+function createPassageObject(name, tags) {
+  const isGeo = tags.includes('geo');
+  const p = {
+    name,
+    tags,
+    lat: null, lng: null,
+    radius: isGeo ? 20 : null,
+    lede: '',
+    dwell: isGeo ? 12000 : null,
+    after: null, then: null, facing: null,
+    dirs: [], links: [], body: ''
+  };
+  passages.push(p);
+  buildMarkers();
+  renderPassageList('');
+  return passages.length - 1;
+}
+
 function createNewPassage() {
   const nameInput = document.getElementById('npName');
   const name = nameInput.value.trim();
@@ -719,27 +755,13 @@ function createNewPassage() {
   nameInput.style.outline = '';
   const rawTags = document.getElementById('npTags').value.trim();
   const tags = rawTags ? rawTags.split(/\s+/).filter(Boolean) : [];
-  const isGeo = tags.includes('geo');
-  passages.push({
-    name,
-    tags,
-    lat: isGeo ? null : null,
-    lng: isGeo ? null : null,
-    radius: isGeo ? 20 : null,
-    lede: '',
-    dwell: isGeo ? 12000 : null,
-    after: null, then: null, facing: null,
-    dirs: [], links: [], body: ''
-  });
   closeNewPassageDialog();
-  const i = passages.length - 1;
-  buildMarkers();
-  renderPassageList('');
+  const i = createPassageObject(name, tags);
   selectPassage(i);
-  setStatus('Created passage "' + name + '"' + (isGeo ? ' (geo, no coordinates yet — set lat/lng in the Editor).' : ' (non-geo).'));
+  setStatus('Created passage "' + name + '"' + (tags.includes('geo') ? ' (geo, no coordinates yet — set lat/lng in the Editor).' : ' (non-geo).'));
 }
 
-document.getElementById('newPassageBtn').addEventListener('click', openNewPassageDialog);
+document.getElementById('newPassageBtn').addEventListener('click', () => openNewPassageDialog());
 document.getElementById('npCreateBtn').addEventListener('click', createNewPassage);
 document.getElementById('npCancelBtn').addEventListener('click', closeNewPassageDialog);
 document.getElementById('newPassageOverlay').addEventListener('click', function(e) {
@@ -749,6 +771,91 @@ document.getElementById('newPassageDialog').addEventListener('keydown', function
   if (e.key === 'Enter') createNewPassage();
   if (e.key === 'Escape') closeNewPassageDialog();
 });
+
+// ── Passage-picker select: builds <option> list ────────────────────────────
+// Returns a <select> element. When the user picks "— New passage… —" they are
+// prompted for a name; the new passage is created immediately and the select's
+// value is updated to the new name. onchange(name) is called with the final
+// chosen passage name (never with the sentinel value).
+function buildPassageSelect(currentValue, excludeIndex, onchange) {
+  const sel = document.createElement('select');
+  sel.className = 'target';
+
+  // Blank / placeholder
+  const blank = document.createElement('option');
+  blank.value = '';
+  blank.textContent = '— none —';
+  sel.appendChild(blank);
+
+  // "New passage…" sentinel — always at the top after blank
+  const newOpt = document.createElement('option');
+  newOpt.value = '__new__';
+  newOpt.textContent = '— New passage… —';
+  sel.appendChild(newOpt);
+
+  // All existing passages except the one being edited
+  passages.forEach((p, i) => {
+    if (i === excludeIndex) return;
+    const opt = document.createElement('option');
+    opt.value = p.name;
+    opt.textContent = p.name;
+    if (p.name === currentValue) opt.selected = true;
+    sel.appendChild(opt);
+  });
+
+  // If currentValue set but no matching option, add it (e.g. loaded from file)
+  if (currentValue && !passages.find(p => p.name === currentValue)) {
+    const opt = document.createElement('option');
+    opt.value = currentValue;
+    opt.textContent = currentValue + ' (missing)';
+    opt.selected = true;
+    sel.appendChild(opt);
+  }
+
+  if (!currentValue) sel.value = '';
+
+  sel.addEventListener('change', function() {
+    if (sel.value === '__new__') {
+      // Suggest a name based on the parent passage name
+      const parent = passages[selectedIndex];
+      const suggested = parent ? parent.name + '_' : '';
+      const name = window.prompt('New passage name:', suggested);
+      if (!name || !name.trim()) {
+        // Revert to previous value
+        sel.value = currentValue || '';
+        return;
+      }
+      const trimmed = name.trim();
+      // Create the passage if it doesn't already exist
+      if (!passages.find(p => p.name === trimmed)) {
+        createPassageObject(trimmed, []);
+        // Re-populate this select with the new option and select it
+        // (rebuild options rather than full re-render)
+        rebuildPassageSelectOptions(sel, trimmed, excludeIndex);
+      }
+      sel.value = trimmed;
+      onchange(trimmed);
+    } else {
+      onchange(sel.value);
+    }
+  });
+
+  return sel;
+}
+
+// Rebuilds the <option> list of an existing passage select in-place.
+function rebuildPassageSelectOptions(sel, selectedValue, excludeIndex) {
+  // Keep blank and __new__ options (first two), remove the rest
+  while (sel.options.length > 2) sel.remove(2);
+  passages.forEach((p, i) => {
+    if (i === excludeIndex) return;
+    const opt = document.createElement('option');
+    opt.value = p.name;
+    opt.textContent = p.name;
+    sel.appendChild(opt);
+  });
+  sel.value = selectedValue || '';
+}
 
 // ── Parse [[links]] out of body text into a separate array ────────────────
 function extractLinks(bodyText) {
@@ -907,6 +1014,59 @@ function renderLinkChips() {
   });
 }
 
+// ── Build a single @dir row element (no full re-render) ────────────────────
+function buildDirRow(d, di) {
+  const row = document.createElement('div');
+  row.className = 'dir-rule';
+  row.dataset.di = di;
+
+  const startIn = document.createElement('input');
+  startIn.type = 'number'; startIn.className = 'dir-start';
+  startIn.value = d.start; startIn.placeholder = 'start°'; startIn.inputMode = 'numeric';
+  startIn.addEventListener('input', () => { updateRawPreview(); });
+
+  const dash = document.createElement('span');
+  dash.textContent = '-';
+
+  const endIn = document.createElement('input');
+  endIn.type = 'number'; endIn.className = 'dir-end';
+  endIn.value = d.end; endIn.placeholder = 'end°'; endIn.inputMode = 'numeric';
+  endIn.addEventListener('input', () => { updateRawPreview(); });
+
+  const targetSel = buildPassageSelect(d.target, selectedIndex, (name) => {
+    // Update the in-memory dirs array for the raw preview
+    const dirRules = document.querySelectorAll('#dirRules .dir-rule');
+    const rowIndex = Array.from(dirRules).indexOf(row);
+    if (rowIndex !== -1 && passages[selectedIndex]) {
+      passages[selectedIndex].dirs[rowIndex] = passages[selectedIndex].dirs[rowIndex] || {};
+      passages[selectedIndex].dirs[rowIndex].target = name;
+    }
+    updateRawPreview();
+    if (name) setStatus('Dir target set to "' + name + '". Apply + Save to commit.');
+  });
+
+  const removeBtn = document.createElement('button');
+  removeBtn.className = 'remove-dir';
+  removeBtn.textContent = '✕';
+  removeBtn.addEventListener('click', () => {
+    // Remove from DOM without re-rendering the whole editor
+    const allRows = Array.from(document.querySelectorAll('#dirRules .dir-rule'));
+    const rowIdx = allRows.indexOf(row);
+    if (rowIdx !== -1 && passages[selectedIndex]) {
+      passages[selectedIndex].dirs.splice(rowIdx, 1);
+    }
+    row.remove();
+    updateRawPreview();
+  });
+
+  row.appendChild(startIn);
+  row.appendChild(dash);
+  row.appendChild(endIn);
+  row.appendChild(targetSel);
+  row.appendChild(removeBtn);
+  return row;
+}
+
 function renderEditor() {
   const panel = document.getElementById('editorPanel');
   if (selectedIndex === null || !passages[selectedIndex]) {
@@ -917,6 +1077,7 @@ function renderEditor() {
   // Ensure links array exists (handles passages loaded before this field existed)
   if (!Array.isArray(p.links)) p.links = [];
 
+  // Build static HTML scaffold (no dir rows or dropdowns yet — those are injected below)
   panel.innerHTML = `
     <div class="field-row">
       <label>Passage Name</label>
@@ -952,23 +1113,13 @@ function renderEditor() {
       <label>After (ms until second-stage)</label>
       <input type="number" id="f_after" value="${p.after ?? ''}" placeholder="leave blank if none" inputmode="numeric">
     </div>
-    <div class="field-row">
-      <label>Then (second-stage passage name)</label>
-      <input type="text" id="f_then" value="${escAttr(p.then ?? '')}" placeholder="leave blank if none" autocorrect="off" autocapitalize="off" spellcheck="false">
+    <div class="field-row" id="thenRow">
+      <label>Then (second-stage passage)</label>
+      <!-- passage select injected by JS below -->
     </div>
     <div class="field-row">
       <label>Directional Variants (@dir)</label>
-      <div class="dir-rules" id="dirRules">
-        ${p.dirs.map((d, di) => `
-          <div class="dir-rule" data-di="${di}">
-            <input type="number" class="dir-start" value="${d.start}" placeholder="start°" inputmode="numeric">
-            <span>-</span>
-            <input type="number" class="dir-end" value="${d.end}" placeholder="end°" inputmode="numeric">
-            <input type="text" class="target" value="${escAttr(d.target)}" placeholder="passage name" autocorrect="off" autocapitalize="off" spellcheck="false">
-            <button class="remove-dir" data-di="${di}">✕</button>
-          </div>
-        `).join('')}
-      </div>
+      <div class="dir-rules" id="dirRules"></div>
       <button class="btn" id="addDirBtn" style="margin-top:4px;">+ Add @dir Rule</button>
     </div>
     ` : ''}
@@ -991,6 +1142,37 @@ function renderEditor() {
     </div>
     <button class="btn primary" id="applyBtn" style="margin-bottom:8px;">Apply Changes</button>
   `;
+
+  // ── Inject @then passage select ──────────────────────────────────────────
+  if (isGeo) {
+    const thenRow = document.getElementById('thenRow');
+    const thenSel = buildPassageSelect(p.then || '', selectedIndex, (name) => {
+      passages[selectedIndex].then = name || null;
+      updateRawPreview();
+      if (name) setStatus('Second stage set to "' + name + '". Apply + Save to commit.');
+    });
+    thenSel.id = 'f_then';
+    const hint = document.createElement('span');
+    hint.className = 'coord-hint';
+    hint.textContent = 'Select an existing passage or create a new one for the second stage.';
+    thenRow.appendChild(thenSel);
+    thenRow.appendChild(hint);
+
+    // ── Inject @dir rows ─────────────────────────────────────────────────
+    const dirRules = document.getElementById('dirRules');
+    p.dirs.forEach((d, di) => {
+      dirRules.appendChild(buildDirRow(d, di));
+    });
+
+    // + Add @dir Rule: appends a row in-place, no full re-render
+    document.getElementById('addDirBtn').addEventListener('click', () => {
+      const newDir = { start: 0, end: 45, target: '' };
+      passages[selectedIndex].dirs.push(newDir);
+      const di = passages[selectedIndex].dirs.length - 1;
+      document.getElementById('dirRules').appendChild(buildDirRow(newDir, di));
+      updateRawPreview();
+    });
+  }
 
   // Populate chips
   renderLinkChips();
@@ -1020,19 +1202,6 @@ function renderEditor() {
   }
 
   document.getElementById('applyBtn').addEventListener('click', applyEdits);
-
-  const addDir = document.getElementById('addDirBtn');
-  if (addDir) addDir.addEventListener('click', () => {
-    passages[selectedIndex].dirs.push({ start: 0, end: 45, target: '' });
-    renderEditor(); updateRawPreview();
-  });
-  document.querySelectorAll('.remove-dir').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const di = parseInt(btn.dataset.di, 10);
-      passages[selectedIndex].dirs.splice(di, 1);
-      renderEditor(); updateRawPreview();
-    });
-  });
 }
 
 function applyEdits() {
@@ -1058,12 +1227,18 @@ function applyEdits() {
     p.facing = isFinite(facingVal) ? facingVal : null;
     const afterVal = parseInt(document.getElementById('f_after').value, 10);
     p.after = isFinite(afterVal) ? afterVal : null;
-    p.then = document.getElementById('f_then').value.trim() || null;
-    const dirRules = document.querySelectorAll('.dir-rule');
-    p.dirs = Array.from(dirRules).map(row => ({
+    // @then is managed live by the select's onchange; read back from p.then directly.
+    // But also sync the select's current value in case the user hasn't triggered change:
+    const thenSel = document.getElementById('f_then');
+    if (thenSel && thenSel.value !== '__new__') {
+      p.then = thenSel.value || null;
+    }
+    // @dir: read current values from the DOM rows
+    const dirRows = document.querySelectorAll('#dirRules .dir-rule');
+    p.dirs = Array.from(dirRows).map(row => ({
       start: parseFloat(row.querySelector('.dir-start').value),
       end: parseFloat(row.querySelector('.dir-end').value),
-      target: row.querySelector('.target').value.trim()
+      target: row.querySelector('select.target') ? row.querySelector('select.target').value : ''
     })).filter(d => isFinite(d.start) && isFinite(d.end) && d.target);
   }
   buildMarkers();
@@ -1075,8 +1250,25 @@ function applyEdits() {
 
 function updateRawPreview() {
   const el = document.getElementById('rawPreview');
-  if (selectedIndex !== null && passages[selectedIndex]) el.value = serializePassage(passages[selectedIndex]);
-  else el.value = '';
+  if (selectedIndex !== null && passages[selectedIndex]) {
+    // Snapshot current dir values from DOM if editor is open
+    const dirRows = document.querySelectorAll('#dirRules .dir-rule');
+    if (dirRows.length) {
+      const p = passages[selectedIndex];
+      const domDirs = Array.from(dirRows).map(row => ({
+        start: parseFloat(row.querySelector('.dir-start').value),
+        end: parseFloat(row.querySelector('.dir-end').value),
+        target: row.querySelector('select.target') ? row.querySelector('select.target').value : ''
+      }));
+      // Only use domDirs for the preview; don't mutate p.dirs until Apply
+      const snap = Object.assign({}, p, { dirs: domDirs.filter(d => isFinite(d.start) && isFinite(d.end)) });
+      el.value = serializePassage(snap);
+      return;
+    }
+    el.value = serializePassage(passages[selectedIndex]);
+  } else {
+    el.value = '';
+  }
 }
 
 function getToken() { return document.getElementById('tokenInput').value.trim(); }
