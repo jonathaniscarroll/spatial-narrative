@@ -460,13 +460,6 @@ body {
   font-style: italic;
   margin-top: 2px;
 }
-/* Link helper buttons (add from existing passages) */
-.link-helper {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 2px;
-}
 
 /* New Passage dialog overlay */
 #newPassageOverlay {
@@ -728,8 +721,7 @@ function closeNewPassageDialog() {
   document.getElementById('newPassageOverlay').classList.remove('open');
 }
 
-// Creates a new passage and returns its index. Used by toolbar button and
-// inline "New passage…" select handlers.
+// Creates a new passage and returns its index.
 function createPassageObject(name, tags) {
   const isGeo = tags.includes('geo');
   const p = {
@@ -816,21 +808,16 @@ function buildPassageSelect(currentValue, excludeIndex, onchange) {
 
   sel.addEventListener('change', function() {
     if (sel.value === '__new__') {
-      // Suggest a name based on the parent passage name
       const parent = passages[selectedIndex];
       const suggested = parent ? parent.name + '_' : '';
       const name = window.prompt('New passage name:', suggested);
       if (!name || !name.trim()) {
-        // Revert to previous value
         sel.value = currentValue || '';
         return;
       }
       const trimmed = name.trim();
-      // Create the passage if it doesn't already exist
       if (!passages.find(p => p.name === trimmed)) {
         createPassageObject(trimmed, []);
-        // Re-populate this select with the new option and select it
-        // (rebuild options rather than full re-render)
         rebuildPassageSelectOptions(sel, trimmed, excludeIndex);
       }
       sel.value = trimmed;
@@ -845,7 +832,6 @@ function buildPassageSelect(currentValue, excludeIndex, onchange) {
 
 // Rebuilds the <option> list of an existing passage select in-place.
 function rebuildPassageSelectOptions(sel, selectedValue, excludeIndex) {
-  // Keep blank and __new__ options (first two), remove the rest
   while (sel.options.length > 2) sel.remove(2);
   passages.forEach((p, i) => {
     if (i === excludeIndex) return;
@@ -910,7 +896,6 @@ function parseTwee(text) {
       } else { bodyLines.push(line); }
     });
     const rawBody = bodyLines.join('\n').replace(/^\n+|\n+$/g, '');
-    // Separate [[links]] from prose body
     const links = extractLinks(rawBody);
     const body  = stripLinks(rawBody);
     return { name, tags, lat, lng, radius, lede, dwell, after, then: then_, facing, dirs, links, body, _raw: block };
@@ -928,9 +913,7 @@ function serializePassage(p) {
   if (p.after != null) out += '@after ' + p.after + '\n';
   if (p.then)   out += '@then ' + p.then + '\n';
   p.dirs.forEach(d => { out += '@dir ' + d.start + '-' + d.end + ':' + d.target + '\n'; });
-  // Body prose
   if (p.body)  out += '\n' + p.body + '\n';
-  // [[Links]] — each on its own line, always present if any
   if (p.links && p.links.length > 0) {
     out += '\n' + p.links.map(l => '[[' + l + ']]').join('\n') + '\n';
   }
@@ -1034,7 +1017,6 @@ function buildDirRow(d, di) {
   endIn.addEventListener('input', () => { updateRawPreview(); });
 
   const targetSel = buildPassageSelect(d.target, selectedIndex, (name) => {
-    // Update the in-memory dirs array for the raw preview
     const dirRules = document.querySelectorAll('#dirRules .dir-rule');
     const rowIndex = Array.from(dirRules).indexOf(row);
     if (rowIndex !== -1 && passages[selectedIndex]) {
@@ -1049,7 +1031,6 @@ function buildDirRow(d, di) {
   removeBtn.className = 'remove-dir';
   removeBtn.textContent = '✕';
   removeBtn.addEventListener('click', () => {
-    // Remove from DOM without re-rendering the whole editor
     const allRows = Array.from(document.querySelectorAll('#dirRules .dir-rule'));
     const rowIdx = allRows.indexOf(row);
     if (rowIdx !== -1 && passages[selectedIndex]) {
@@ -1074,10 +1055,8 @@ function renderEditor() {
   }
   const p = passages[selectedIndex];
   const isGeo = p.tags.includes('geo');
-  // Ensure links array exists (handles passages loaded before this field existed)
   if (!Array.isArray(p.links)) p.links = [];
 
-  // Build static HTML scaffold (no dir rows or dropdowns yet — those are injected below)
   panel.innerHTML = `
     <div class="field-row">
       <label>Passage Name</label>
@@ -1131,14 +1110,10 @@ function renderEditor() {
       <label>Body Text (prose only — links are managed below)</label>
       <textarea id="f_body" rows="6">${escHtml(p.body ?? '')}</textarea>
     </div>
-    <div class="field-row">
+    <div class="field-row" id="linksRow">
       <label>Linked Passages <span style="font-weight:normal;font-style:italic;text-transform:none;">(appear in compass; serialised as [[Name]])</span></label>
       <div class="link-chips" id="linkChips"></div>
-      <span class="link-hint">Tap a passage below to add it as a link — changes save immediately.</span>
-    </div>
-    <div class="field-row">
-      <label>Add Link</label>
-      <div class="link-helper" id="linkHelper"></div>
+      <!-- passage select injected by JS below -->
     </div>
     <button class="btn primary" id="applyBtn" style="margin-bottom:8px;">Apply Changes</button>
   `;
@@ -1164,7 +1139,6 @@ function renderEditor() {
       dirRules.appendChild(buildDirRow(d, di));
     });
 
-    // + Add @dir Rule: appends a row in-place, no full re-render
     document.getElementById('addDirBtn').addEventListener('click', () => {
       const newDir = { start: 0, end: 45, target: '' };
       passages[selectedIndex].dirs.push(newDir);
@@ -1174,32 +1148,30 @@ function renderEditor() {
     });
   }
 
+  // ── Inject Linked Passages select ────────────────────────────────────────
+  const linksRow = document.getElementById('linksRow');
+  const linkSel = buildPassageSelect('', selectedIndex, (name) => {
+    if (!name) return;
+    const p2 = passages[selectedIndex];
+    if (!Array.isArray(p2.links)) p2.links = [];
+    if (!p2.links.includes(name)) {
+      p2.links.push(name);
+      renderLinkChips();
+      updateRawPreview();
+      setStatus('Linked "' + name + '" to "' + p2.name + '". Apply + Save to commit.');
+    }
+    // Reset select back to blank after adding
+    linkSel.value = '';
+  });
+  linkSel.id = 'linkAddSel';
+  const linkHint = document.createElement('span');
+  linkHint.className = 'link-hint';
+  linkHint.textContent = 'Select a passage to add it as a link. Tap ✕ on a chip to remove.';
+  linksRow.appendChild(linkSel);
+  linksRow.appendChild(linkHint);
+
   // Populate chips
   renderLinkChips();
-
-  // Populate add-link helper buttons
-  const helper = document.getElementById('linkHelper');
-  passages.forEach((other, idx) => {
-    if (idx === selectedIndex) return;
-    const btn = document.createElement('button');
-    btn.type = 'button'; btn.className = 'btn'; btn.textContent = other.name;
-    btn.addEventListener('click', () => {
-      const p2 = passages[selectedIndex];
-      if (!Array.isArray(p2.links)) p2.links = [];
-      if (!p2.links.includes(other.name)) {
-        p2.links.push(other.name);
-        renderLinkChips();
-        updateRawPreview();
-        setStatus('Linked "' + other.name + '" to "' + p2.name + '". Apply + Save to commit.');
-      }
-    });
-    helper.appendChild(btn);
-  });
-  if (!helper.childNodes.length) {
-    const empty = document.createElement('span');
-    empty.textContent = 'No other passages yet.';
-    helper.appendChild(empty);
-  }
 
   document.getElementById('applyBtn').addEventListener('click', applyEdits);
 }
@@ -1210,7 +1182,6 @@ function applyEdits() {
   p.name = document.getElementById('f_name').value.trim();
   p.tags = document.getElementById('f_tags').value.trim().split(/\s+/).filter(Boolean);
   p.lede = document.getElementById('f_lede').value.trim();
-  // Body: strip any [[links]] the author may have typed directly; they belong in p.links
   const rawBody = document.getElementById('f_body').value;
   const inlineLinks = extractLinks(rawBody);
   inlineLinks.forEach(l => {
@@ -1227,13 +1198,10 @@ function applyEdits() {
     p.facing = isFinite(facingVal) ? facingVal : null;
     const afterVal = parseInt(document.getElementById('f_after').value, 10);
     p.after = isFinite(afterVal) ? afterVal : null;
-    // @then is managed live by the select's onchange; read back from p.then directly.
-    // But also sync the select's current value in case the user hasn't triggered change:
     const thenSel = document.getElementById('f_then');
     if (thenSel && thenSel.value !== '__new__') {
       p.then = thenSel.value || null;
     }
-    // @dir: read current values from the DOM rows
     const dirRows = document.querySelectorAll('#dirRules .dir-rule');
     p.dirs = Array.from(dirRows).map(row => ({
       start: parseFloat(row.querySelector('.dir-start').value),
@@ -1251,7 +1219,6 @@ function applyEdits() {
 function updateRawPreview() {
   const el = document.getElementById('rawPreview');
   if (selectedIndex !== null && passages[selectedIndex]) {
-    // Snapshot current dir values from DOM if editor is open
     const dirRows = document.querySelectorAll('#dirRules .dir-rule');
     if (dirRows.length) {
       const p = passages[selectedIndex];
@@ -1260,7 +1227,6 @@ function updateRawPreview() {
         end: parseFloat(row.querySelector('.dir-end').value),
         target: row.querySelector('select.target') ? row.querySelector('select.target').value : ''
       }));
-      // Only use domDirs for the preview; don't mutate p.dirs until Apply
       const snap = Object.assign({}, p, { dirs: domDirs.filter(d => isFinite(d.start) && isFinite(d.end)) });
       el.value = serializePassage(snap);
       return;
