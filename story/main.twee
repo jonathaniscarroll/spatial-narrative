@@ -686,7 +686,9 @@ setup.geo.getLinkedTargets = function (passageName) {
   var text    = Story.get(passageName).text;
   var targets = [];
   var seen    = Object.create(null);
-  var chunks  = text.split('');
+  var chunks  = text.split('[[');
+  chunks.slice(1).forEach(function (chunk) {
+    var end = chunk.indexOf(']]');
     if (end === -1) { return; }
     var raw    = chunk.slice(0, end).trim();
     var target = raw;
@@ -1357,10 +1359,6 @@ $(document).on(':passagerender', function () {
   setup.geo.refresh();
 });
 
-[[');
-  chunks.slice(1).forEach(function (chunk) {
-    var end = chunk.indexOf(']]
-
 :: Start
 
 You are standing inside a geolocated SugarCube story.
@@ -1656,110 +1654,157 @@ This is where palula lives
 
 :: Academy [geo]
 @geo 44.646000,-63.576046,5
-@dwell 12000
-@after 5000
-@then Academy-FireEscape-2
-@dir 45-135:Academy-FireEscape-North
-@dir 135-225:Academy-FireEscape-East
-@dir 225-315:Academy-FireEscape-South
-@dir 315-45:Academy-FireEscape-West
+@lede Front entrance. Something is watching from the upper windows.
+@dwell 8000
+@after 10000
+@then Academy_late
+@dir 45-135:Academy_east
+@dir 135-225:Academy_south
+@dir 225-315:Academy_west
+@dir 315-45:Academy_north
 
-From here, you can see the gleam of towers and the green of the hill, the blue of the sky and the white of the clock tower.
+You've found the first node. The building does not announce itself — it simply waits.
+
+Stop here. Don't move. The door counts seconds.
+
+Three brass numbers above the lintel. Note them.
+The compass is live: your next checkpoint is already marked.
 
 [[Academy_SideEast]]
 [[Academy_FrontWest]]
 
 :: Academy_late
-@lede The threshold deepens into duration.
+@lede The entrance has registered you. Something shifts.
 
-Standing here long enough, the building stops being backdrop. The rhythm of the entrance -- door, step, pause -- becomes legible as a designed pressure.
+You've been standing here long enough that the building has taken notice. A light in the upper corridor was on when you arrived. It is no longer on.
+
+The next node is around the corner to your right — the east flank. The fire escape will be visible. Go there only when the compass confirms it.
 
 :: Academy_north
-@lede Facing uphill -- Citadel Hill frames the building from above.
+@lede Facing north: Citadel Hill rises behind the building like a wall.
 
-The hilltop fortification and the institution below it are part of the same grammar: command, elevation, display. The academy sits where civic authority begins to be schooled.
+The fortification and the academy share a sightline. One was built to command the harbour; the other, to command the curriculum. From here you can see how the hill uses the building as a lower step.
+
+Clue collected: the hilltop was here first.
 
 :: Academy_east
-@lede Facing east along the building's flank.
+@lede Facing east: the fire escape is visible. That is your next objective.
 
-The facade gives way to brick and downpipe. A fire escape brackets the corner -- the building's emergency exit made visible as sculpture. Head that way.
+Iron brackets against pale brick. Count the landings — there are three. The middle one has a propped door, which means someone is still inside, or just left.
+
+The compass bearing to Academy_SideEast is northeast. Move when ready.
 
 :: Academy_south
-@lede Facing south toward the street.
+@lede Facing south: the street is a moat.
 
-The street is a frame. Pedestrians and cars and the grid of the city, held at one storey's distance from the institution's front face.
+The building holds its ground above the pavement. Traffic and pedestrians move below the institution's sightline. You are on the threshold between public and semi-public.
+
+Hold this facing for five seconds. The second stage reveals what the entrance is really guarding.
 
 :: Academy_west
-@lede Facing west -- the shorter flank.
+@lede Facing west: the shorter flank, undecorated.
 
-The roof cornice carries across the west face at a single unbroken height. Nothing decorative. Pure institutional register.
+No windows on this side. No doors. Pure wall. The building shows you nothing facing west — and that refusal is a kind of information.
+
+Turn back. There is nothing to collect here. The route continues east.
 
 :: Academy_SideEast [geo]
 @geo 44.645952,-63.576180,5
-@lede The fire escape -- iron over brick, emergency as architecture.
+@lede Checkpoint 2 of 4. The fire escape. You are now off the public face.
 @dwell 8000
-@after 8000
+@after 9000
 @then Academy_SideEast_late
 @dir 315-45:Academy_SideEast_north
 @dir 225-315:Academy_SideEast_west
 
-The metal structure brackets the east corner. Each landing is a stage; each rung a decision about how quickly to descend. Propped doors. The smell of outside air when inside work has gone on too long.
+Iron stairs, three landings. The middle door is propped with a brick — the same brick every time, or always a different one. The emergency system holds a small social life in suspension.
+
+Stand still. The passage resolves in eight seconds.
+Next checkpoint: the back lane. Compass heading is south.
 
 [[Academy_BackLane]]
 
 :: Academy_SideEast_late
-@lede The fire escape settles into ordinariness.
+@lede You've been here long enough to notice what changes.
 
-Visited enough times in enough weathers, it becomes furniture. A place to stand that is neither in nor out, a holding zone between session and session.
+A window on the second landing has a crack in the lower-left pane. It's been taped from the inside, then re-taped over the old tape. Someone has been monitoring this failure for longer than you have been alive.
+
+Secondary observation logged. Move to the rear.
 
 :: Academy_SideEast_north
-@lede Facing north up the alley between buildings.
+@lede Facing north: the alley between buildings amplifies sound.
 
-The passage between walls amplifies every sound: a trolley, a distant door, rain on metal. The alley is the building's true outside -- undesigned and therefore honest.
+The gap between this building and its neighbour is a resonance chamber. Sound from the street arrives late, slightly wrong in pitch. You can hear a conversation you cannot locate.
+
+Listen. Then move south toward the back lane.
 
 :: Academy_SideEast_west
-@lede Facing back toward the front of the building.
+@lede Facing west, back toward the entrance you came from.
 
-The full length of the east flank reads in one sightline. Brick courses, window regularity, the logic of a building that was planned to be looked at from the front and used from the sides.
+The full length of the east flank is visible from here. Thirty-two windows. Count them if you need to confirm you are in the right place. You should see the entrance node behind you — it will not be active now that you have left it.
+
+The building has a before and an after. You are in the after.
 
 :: Academy_BackLane [geo]
 @geo 44.645788,-63.576035,5
-@lede The lane behind -- service, infrastructure, undecorated use.
+@lede Checkpoint 3 of 4. The rear of the building. No public face here.
 @dwell 8000
 @dir 45-135:Academy_BackLane_east
 @dir 225-315:Academy_BackLane_west
 
-The rear of the institution. Deliveries, waste, HVAC exhaust, cables. Here the building admits what it needs to function: loading bay, ventilation, the practical maintenance of the educational front.
+This is what the building actually runs on: a loading bay, a ventilation stack, two cable conduits painted the wrong shade of grey, a drain that smells of the 1970s.
+
+The institution's front is a performance. This is the stage door.
+
+Dwell here. Do not move until the passage locks in.
+Your final checkpoint is around the northwest corner.
 
 [[Academy_FrontWest]]
 
 :: Academy_BackLane_east
-@lede Facing back toward the fire escape corner.
+@lede Facing east, back toward the fire escape corner.
 
-The east corner aligns with the lane's far end. A frame. The fire escape reads as a formal element from this distance -- the emergency exit as ornament.
+From this distance the fire escape reads differently — less emergency, more ornament. The iron structure has been here so long it has become part of the building's identity. Checkpoint 2 is visible from here, already receding.
+
+You have come most of the way around.
 
 :: Academy_BackLane_west
-@lede Facing west along the back.
+@lede Facing west: the service end of the lane.
 
-Service door, dumpster enclosure, a pipe that runs the full height of the wall. The west end of the lane opens onto the street where the building pretends not to have a back.
+A dumpster enclosure, a pipe that runs full-height, and at the far end, the street. The building pretends the lane does not exist. The lane disagrees.
+
+Final node is to your west-northwest. The compass will confirm.
 
 :: Academy_FrontWest [geo]
 @geo 44.646060,-63.575920,5
-@lede The west corner -- where the lane rejoins the public face.
+@lede Checkpoint 4 of 4. The circuit closes here.
 @dwell 6000
+@after 8000
+@then Academy_FrontWest_late
 @dir 135-225:Academy_FrontWest_south
 @dir 45-135:Academy_FrontWest_east
 
-The building's two registers meet at this corner: the attended front and the working back. A single step turns the walk from maintenance to presentation.
+The west corner is where the rear lane rejoins the public face. One step around this corner and the maintenance grammar ends; the institutional grammar resumes.
+
+You have walked all four sides. The building has been read.
 
 [[Academy]]
 
-:: Academy_FrontWest_south
-@lede Facing south -- the corner opens toward the street.
+:: Academy_FrontWest_late
+@lede Circuit complete. The building has been circumnavigated.
 
-The west flank ends here. From the footpath, the building's front begins its public address. The corner is a grammatical mark: the institution's sentence starts here.
+Four nodes. Four dwell-resolved readings. The compass has pointed you around the full perimeter.
+
+What you know now that you did not know at the start: the front is a threshold, the east is a stage, the rear is a confession, the west is a refusal. Architecture as four-sided argument.
+
+Return to the entrance to close the loop — or leave. The building will keep its count either way.
+
+:: Academy_FrontWest_south
+@lede Facing south: the corner opens to the street.
+
+This is where the building's public sentence begins — or ends, depending on your direction. The corner is grammatical: a pause before the front facade resumes its address.
 
 :: Academy_FrontWest_east
 @lede Facing back east along the rear lane.
 
-The lane stretches toward the fire escape. A closed loop, completed. The building has been circumnavigated; it now fits a body's knowledge.
+The lane stretches toward the fire escape. The circuit is visible as a single sightline: three checkpoints, receding. The building wraps around you now as a known quantity.
