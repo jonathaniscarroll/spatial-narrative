@@ -1656,16 +1656,15 @@ This is where palula lives
 
 :: Academy [geo]
 @geo 44.646000,-63.576046,5
-@lede Front threshold -- the building holds the hill behind it.
-@dwell 8000
-@after 10000
-@then Academy_late
-@dir 315-45:Academy_north
-@dir 45-135:Academy_east
-@dir 135-225:Academy_south
-@dir 225-315:Academy_west
+@dwell 12000
+@after 5000
+@then Academy-FireEscape-2
+@dir 45-135:Academy-FireEscape-North
+@dir 135-225:Academy-FireEscape-East
+@dir 225-315:Academy-FireEscape-South
+@dir 315-45:Academy-FireEscape-West
 
-The entrance reads as institution: brick and stone, steps worn shallow from years of approach. From here the Citadel dominates the skyline north, and the building becomes one layer in a stack of imposed structure.
+From here, you can see the gleam of towers and the green of the hill, the blue of the sky and the white of the clock tower.
 
 [[Academy_SideEast]]
 [[Academy_FrontWest]]
@@ -1724,7 +1723,7 @@ The passage between walls amplifies every sound: a trolley, a distant door, rain
 The full length of the east flank reads in one sightline. Brick courses, window regularity, the logic of a building that was planned to be looked at from the front and used from the sides.
 
 :: Academy_BackLane [geo]
-@geo 44.646080,-63.576200,5
+@geo 44.645788,-63.576035,5
 @lede The lane behind -- service, infrastructure, undecorated use.
 @dwell 8000
 @dir 45-135:Academy_BackLane_east
