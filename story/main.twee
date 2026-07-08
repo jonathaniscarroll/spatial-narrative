@@ -686,9 +686,7 @@ setup.geo.getLinkedTargets = function (passageName) {
   var text    = Story.get(passageName).text;
   var targets = [];
   var seen    = Object.create(null);
-  var chunks  = text.split('[[');
-  chunks.slice(1).forEach(function (chunk) {
-    var end = chunk.indexOf(']]');
+  var chunks  = text.split('');
     if (end === -1) { return; }
     var raw    = chunk.slice(0, end).trim();
     var target = raw;
@@ -1359,6 +1357,10 @@ $(document).on(':passagerender', function () {
   setup.geo.refresh();
 });
 
+[[');
+  chunks.slice(1).forEach(function (chunk) {
+    var end = chunk.indexOf(']]
+
 :: Start
 
 You are standing inside a geolocated SugarCube story.
@@ -1776,7 +1778,7 @@ A dumpster enclosure, a pipe that runs full-height, and at the far end, the stre
 Final node is to your west-northwest. The compass will confirm.
 
 :: Academy_FrontWest [geo]
-@geo 44.646060,-63.575920,5
+@geo 44.645926,-63.575939,5
 @lede Checkpoint 4 of 4. The circuit closes here.
 @dwell 6000
 @after 8000
