@@ -1432,7 +1432,7 @@ The clock stops reading as ornament and starts reading as command.
 At the waterline the narrative becomes weather-first.
 
 :: Resolutes Club [geo]
-@geo 44.635722,-63.572139,50
+@geo 44.635722,-63.572139,15
 @lede A narrow service edge behind the club.
 @dwell 15000
 @after 10000
@@ -1486,17 +1486,6 @@ this is radstorm
 @lede Facing into the stormline.
 
 The site sharpens into exposure, charge, and warning.
-
-:: Oteasare_Gorghe_vessesscen [geo]
-@geo 44.636306,-63.572139,12
-@lede Oteasare Gorghe vessesscen.
-@dwell 12000
-@dir 315-45:Oteasare_north
-@dir 46-135:Oteasare_east
-@dir 136-225:Oteasare_south
-@dir 226-314:Oteasare_west
-
-Gorghe vessesscen.
 
 :: Oteasare_north
 @lede Facing north.
@@ -1639,7 +1628,7 @@ On this corner the wait feels longer than the procession.
 Police radios crackle, neighbours stand back from the curb, and then the line of cars arrives all at once.
 
 :: Palula [geo img Palula.jpeg]
-@geo 44.636128,-63.572082,10
+@geo 44.636128,-63.572082,20
 @dwell 12000
 
 @img Palula.jpeg
