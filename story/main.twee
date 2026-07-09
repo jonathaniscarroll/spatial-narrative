@@ -686,15 +686,16 @@ setup.geo.getLinkedTargets = function (passageName) {
   var text    = Story.get(passageName).text;
   var targets = [];
   var seen    = Object.create(null);
-  var chunks  = text.split('');
-    if (end === -1) { return; }
-    var raw    = chunk.slice(0, end).trim();
+  var regex   = /\[\[(.+?)\]\]/g;
+  var match;
+  while ((match = regex.exec(text)) !== null) {
+    var raw    = match[1].trim();
     var target = raw;
     if (raw.indexOf('->') !== -1)      { target = raw.split('->')[1].trim(); }
     else if (raw.indexOf('<-') !== -1) { target = raw.split('<-')[0].trim(); }
     else if (raw.indexOf('|') !== -1)  { target = raw.split('|')[1].trim(); }
-    if (!seen[target]) { seen[target] = true; targets.push(target); }
-  });
+    if (target && !seen[target]) { seen[target] = true; targets.push(target); }
+  }
   return targets;
 };
 
@@ -860,12 +861,6 @@ setup.geo.getShownPassage = function () {
 };
 
 // ── Comments via GitHub Issues ─────────────────────────────────────────────
-//
-// Each geo passage gets one GitHub Issue titled "[passage] PassageName".
-// Comments on that issue = field notes left by readers at that location.
-// The issue is created automatically on first post if it doesn't exist.
-// A token with issues:write scope is required to post; read is public.
-//
 var _geoCommentsOwner   = 'jonathaniscarroll';
 var _geoCommentsRepo    = 'spatial-narrative';
 var _geoCommentsBase    = 'https://api.github.com/repos/' + _geoCommentsOwner + '/' + _geoCommentsRepo;
@@ -1173,7 +1168,6 @@ setup.geo.renderPassage = function () {
   }
   setMedia(shown);
 
-  // Show comment panel (load is triggered from updateActiveByDwell on first activation)
   var panel = document.getElementById('commentsPanel');
   if (panel) { panel.style.display = ''; }
   setup.geo.comments.bindSubmit();
@@ -1356,10 +1350,6 @@ $(document).on(':passagerender', function () {
   setup.geo.startHeartbeat();
   setup.geo.refresh();
 });
-
-[[');
-  chunks.slice(1).forEach(function (chunk) {
-    var end = chunk.indexOf(']]
 
 :: Start
 
