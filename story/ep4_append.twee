@@ -1,0 +1,176 @@
+:: Ep4_BarringtonApproach [geo ep4]
+@geo 44.648200,-63.574100,20
+@lede Someone sent you a link.
+@dwell 10000
+@after 14000
+@then Ep4_BarringtonApproach_late
+@dir 315-45:Ep4_BarringtonApproach_north
+@dir 135-225:Ep4_BarringtonApproach_south
+
+You are standing on Barrington Street. The link was sent by someone who said: go here first.
+
+You don't know what the page will say. You open it anyway. The title bar renders navy blue: Geo Passage Navigator Core - Netscape Style.
+
+A marquee scrolls past. You read it twice.
+
+[[Ep4_GranvilleCorner]]
+[[Ep4_WaterfrontBoard]]
+
+:: Ep4_BarringtonApproach_late
+@lede You haven't moved. The page is still waiting.
+
+The meta-strip says: MODE: Idle. POSITION: No coordinates yet.
+
+The status bar at the bottom reads: Geolocation and orientation both require secure context permissions.
+
+You press Start Geolocation. Your browser asks a question.
+
+:: Ep4_BarringtonApproach_north
+@lede Facing north up Barrington — the street opens toward the Citadel ridge.
+
+The page knows which way you're facing now. The red arrow in the compass dial just moved. This is the moment the interface stops being a webpage and starts being an instrument.
+
+:: Ep4_BarringtonApproach_south
+@lede Facing south toward the waterfront.
+
+The harbour is three blocks away. The compass is pointing at something three blocks away. The number in the list says: 240 m. Bearing 182 degrees.
+
+The story is already measuring the distance between where you are and where you need to go.
+
+:: Ep4_GranvilleCorner [geo ep4]
+@geo 44.647600,-63.574400,15
+@lede The browser asked. You said yes.
+@dwell 12000
+@after 15000
+@then Ep4_GranvilleCorner_late
+@dir 45-135:Ep4_GranvilleCorner_east
+@dir 225-315:Ep4_GranvilleCorner_west
+
+The meta-strip updates. Your latitude appears to five decimal places. Your longitude appears to five decimal places. MODE shifts from Idle to GPS live.
+
+The system has found you. It is now measuring the distance between your current coordinates and every named point in the story — the Ferry Terminal, the Clock Tower, the Academy, fifteen passages total — and finding which ones are close enough to speak.
+
+None of them are you yet. The compass still says: No passages within heading threshold.
+
+[[Ep4_MarketSlip]]
+[[Ep4_WaterfrontBoard]]
+
+:: Ep4_GranvilleCorner_late
+@lede You press Enable Compass. iOS asks another question.
+
+You tap Allow. The red needle begins to move. You turn slowly on your heel — the needle tracks your turn in real time. The number beside HEADING updates: 134 degrees. 135 degrees. 136 degrees.
+
+You are being read by the phone's magnetometer. The story now knows which way you face.
+
+:: Ep4_GranvilleCorner_east
+@lede Facing east — the harbour opens at the end of the block.
+
+The compass shows a marker bearing 091 degrees. It is pointing toward Ep4_MarketSlip, 60 metres away. You can see the boardwalk from here.
+
+The dot is orange. This means it is the nearest target. Walk toward it.
+
+:: Ep4_GranvilleCorner_west
+@lede Facing west — Granville Mall, pedestrian zone, shallow afternoon shadow.
+
+The story is not here. The story is at the waterfront. You know this because the compass says so: all active markers are pointing east.
+
+Turn around.
+
+:: Ep4_MarketSlip [geo ep4]
+@geo 44.647400,-63.573200,20
+@lede You have been here twelve seconds. Something resolves.
+@dwell 12000
+@after 18000
+@then Ep4_MarketSlip_late
+@dir 315-45:Ep4_MarketSlip_north
+@dir 135-225:Ep4_MarketSlip_south
+
+The dwell counter ran in the background. You stood here and the page counted. At twelve seconds, the passage title changed from Approaching Ep4_MarketSlip to Ep4_MarketSlip — quietly, without fanfare.
+
+This is what the system means by dwell: you must commit to the place before the place will speak. The story does not begin until you choose to be there.
+
+Below the body text, a new panel appears: FIELD NOTES AT THIS LOCATION. Someone stood here before you. They left a note.
+
+[[Ep4_FieldNotesEdge]]
+[[Ep4_WaterfrontBoard]]
+
+:: Ep4_MarketSlip_late
+@lede Eighteen seconds. You haven't moved. The text shifts without warning.
+
+This is the @after mechanic. Time is the navigation. Duration is the input device. No tap, no choice — you simply waited long enough and the story advanced to its second stage.
+
+The building behind you has a different meaning now than it did eighteen seconds ago. The passage knows this.
+
+:: Ep4_MarketSlip_north
+@lede Facing north — toward Granville, toward the approach you came from.
+
+From the waterfront, the street you walked reads differently. The sequence is visible: Barrington, the corner, here. A path that made sense as you walked it and now makes sense again from the other end.
+
+:: Ep4_MarketSlip_south
+@lede Facing south — water, open sky, the harbour mouth.
+
+This is where the story becomes weather. The directional variant fires because you turned your body, not because you pressed anything. Four readings of the same place. Your body is the input.
+
+:: Ep4_FieldNotesEdge [geo ep4]
+@geo 44.647100,-63.572800,15
+@lede The comment panel is open. Someone left a note here.
+@dwell 10000
+@after 12000
+@then Ep4_FieldNotesEdge_late
+
+The GitHub Issues API was called when the passage activated. It searched for an issue labelled geo-comment, titled: [passage] Ep4_FieldNotesEdge. If a previous walker posted a note here, you are reading it now.
+
+Below their timestamp and username: a textarea. A button that says Post Note.
+
+You are standing at a specific latitude and longitude. If you write something and press Post Note, your coordinates will be appended to the comment. The note will be georeferenced. The next person who stands here will read what you wrote, from this place, at this address.
+
+[[Ep4_WaterfrontBoard]]
+
+:: Ep4_FieldNotesEdge_late
+@lede You typed something. You pressed Post Note.
+
+The status field says: Posting. Then: Note posted.
+
+You have written something permanent into a location. Not into the story text — the story text is fixed — but into the record of people who have stood here. A layer of annotation on top of the place.
+
+The next passage is 80 metres west. The compass is pointing at it. The dot is orange.
+
+:: Ep4_WaterfrontBoard [geo ep4]
+@geo 44.647800,-63.572500,25
+@lede The circuit closes.
+@dwell 8000
+@after 12000
+@then Ep4_WaterfrontBoard_late
+@dir 225-315:Ep4_WaterfrontBoard_west
+@dir 45-135:Ep4_WaterfrontBoard_east
+
+You have now stood in four places. You have dwelled, turned, waited, and posted. You have used your body as a navigation input four times.
+
+The story did not ask you to press Next. It did not show you a map with pins. It gave you a heading, a distance, and twelve seconds — and waited to see if you would commit to the place before it would speak.
+
+When you left the previous radius, the last passage stayed on screen. It persisted until this one replaced it. Memory as architecture.
+
+[[Ep4_BarringtonApproach]]
+
+:: Ep4_WaterfrontBoard_late
+@lede You close the tab.
+
+The heartbeat keeps firing into an unmounted document. refresh() is called. The DOM does not exist.
+
+This is fine. The story has always been partly for an audience that has already left. Your coordinates are in the record. Your note is in the record. The passage you dwelled into is in the unlocked array, still held in state, still true.
+
+You are the navigation. Your body was the input. Halifax was the interface.
+
+:: Ep4_WaterfrontBoard_west
+@lede Facing west — back toward Barrington, the first passage, the navy title bar.
+
+The full walk is visible from here as a sequence: approach, corner, slip, edge, board. Five nodes. Five dwell resolutions. The compass pointed you through all of them.
+
+You began by not knowing what the page would say. You ended by having left something in it.
+
+:: Ep4_WaterfrontBoard_east
+@lede Facing east — the harbour, open water, the far shore.
+
+The story ends at the waterline, which is where all Halifax stories end. The system is still running. The heartbeat is still firing. The compass is still measuring the distance between where you are and where the next thing is.
+
+There is always a next thing. The compass always knows.
