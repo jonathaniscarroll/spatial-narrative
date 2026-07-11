@@ -1801,3 +1801,10 @@ The lane stretches toward the fire escape. The circuit is visible as a single si
 :: Academy_east_WorldTradeCentre
 
 :: Academy_south_Re-enter
+
+:: bird noise [geo]
+@geo 44.640357,-63.574238,20
+@dwell 12000
+
+There is a bird noise emanating from this apartment.
+Mark when you hear it
