@@ -93,6 +93,8 @@ Directional and stage-two passages do **not** need a `@geo` directive — they i
 
 `Start` is a non-geo passage that acts as the story's map index. Every top-level geo node should be linked here with `[[PassageName]]`. These links drive the **pre-active** compass — before any passage is dwelled into, the compass shows all Start-linked nodes using real GPS bearings so the author can verify the full node set before field testing.
 
+The authoring tool also uses the `Start` passage as the **seed for the Passages list** — on load, only `Start` and its directly linked passages appear in the list. See [Authoring Tool](#authoring-tool-authorindexhtml) for details.
+
 ```twee
 :: Start
 
@@ -222,9 +224,19 @@ A standalone HTML file — no build step, no server.
 | **New Passage button** (toolbar) | Creating directional variants (`_north`, `_east`), stage-two passages (`_late`), `Start`-index entries, or any passage with no geographic coordinates |
 
 ### Tabs
-- **Passages** — searchable list of all passages; click to select
+- **Passages** — filtered list of reachable passages (see below); click to select
 - **Editor** — form-based editor for all `@` fields, directional rules, body text, and linked passages
 - **Raw** — live preview of the generated `.twee` block for the selected passage
+
+### Passages Tab — Linked-Only Filter
+
+The Passages tab shows a **context-aware subset** of passages rather than the full list:
+
+- **On load:** seeded from the `Start` passage — only `Start` itself and its directly linked passages appear
+- **On select:** when you click a passage, all of *its* linked passages are added to the visible set permanently (the set only ever grows within a session)
+- **Show All / Linked Only toggle:** a button in the tab header switches between the filtered view and the complete passage list; the label updates to reflect the current mode
+
+This mirrors the compass's own reachability logic and keeps the list focused on the part of the graph you are actively authoring. Use **Show All** to jump to any passage outside the current linked set.
 
 ### iOS / home screen
 The authoring tool includes PWA meta tags and a mobile-optimised layout. Add to iOS home screen for full-screen use.
@@ -289,6 +301,7 @@ Place images and audio in the `media/` directory. Reference by filename only:
 ## Changelog
 
 ### July 2026
+- **Authoring tool:** **Passages tab linked-only filter** — list seeds from the `Start` passage on load; selecting a node permanently expands the visible set with that node's links; **Show All / Linked Only** toggle in the tab header to switch between filtered and full list
 - **Authoring tool:** **New Passage button** in toolbar — creates any passage without requiring a map click; supports non-geo passages (directional variants, stage-two passages, etc.) with an optional tags field; opens a Win95-style modal dialog; Esc/Enter keyboard shortcuts and backdrop-click to dismiss
 - **Authoring tool:** Dedicated **Linked Passages** field with chip UI — links serialised as `[[Name]]` lines, separated from prose body; `parseTwee` extracts existing `[[links]]` from body on load; `applyEdits` migrates any inline `[[links]]` typed in body textarea into the links array automatically
 - **Compass pre-active mode:** `refreshVisible` populates `v.visible` from Start-linked geo points using real GPS bearings as soon as position locks, facing threshold skipped so all nodes appear immediately
