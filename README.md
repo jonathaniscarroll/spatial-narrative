@@ -47,12 +47,12 @@ Every geo-tagged passage starts with `@` directives before its body text. All di
 ```twee
 :: PassageName [geo optional-extra-tags]
 @geo LAT,LNG,RADIUS_METRES
+@image media/filename.jpg
 @lede Short italic line shown above the body.
 @dwell MILLISECONDS
 @facing DEGREES
 @after MILLISECONDS
 @then OtherPassageName
-@image filename.jpg
 @audio filename.mp3
 @dir START_DEG-END_DEG:TargetPassageName
 
@@ -69,12 +69,12 @@ Body text goes here. Plain prose.
 | Directive | Description | Default |
 |---|---|---|
 | `@geo lat,lng,r` | Geographic anchor. `r` = trigger radius in metres. | Required for geo tag |
+| `@image media/file` | Image path relative to repo root (e.g. `media/photo.jpg`). Shown below body text. Managed via Upload button in authoring tool. | None |
 | `@lede text` | Short italic subtitle rendered above the body. | None |
 | `@dwell ms` | Milliseconds the player must remain inside the radius before the passage activates. | 12000 ms |
 | `@facing deg` | Override the global heading threshold (35°) for this passage's directional visibility. | 35° |
 | `@after ms` | Milliseconds after activation before switching to the `@then` passage. | None |
 | `@then Name` | Second-stage passage displayed once `@after` elapses. | None |
-| `@image file` | Image filename relative to `media/`. Shown below body text. | None |
 | `@audio file` | Audio filename relative to `media/`. Shown as `<audio controls>`. | None |
 | `@dir S-E:Name` | If heading is in the arc S°→E°, display `Name` instead of the base passage. | None (multiple allowed) |
 
@@ -212,7 +212,8 @@ A standalone HTML file — no build step, no server.
 6. **Drag a marker** to reposition (lat/lng update live)
 7. Edit fields in the Editor tab
 8. **Linked Passages field** — tap passage buttons under "Add Link" to add `[[links]]`; tap ✕ on a chip to remove one. Changes write immediately to the passage data.
-9. Click **Apply Changes** to commit prose/field edits, then add a commit message and click **Save**
+9. **Image field** — choose a file and click **Upload** to push it to `media/` and attach it to the passage as `@image`. See [Image Upload](#image-upload) below.
+10. Click **Apply Changes** to commit prose/field edits, then add a commit message and click **Save**
 
 > **Important:** The **Linked Passages** field is separate from Body Text. Links added here serialise as `[[Name]]` lines in the `.twee` output and are what the compass reads at runtime. Do not manually type `[[links]]` in the body textarea — use the Add Link buttons.
 
@@ -225,7 +226,7 @@ A standalone HTML file — no build step, no server.
 
 ### Tabs
 - **Passages** — filtered list of reachable passages (see below); click to select
-- **Editor** — form-based editor for all `@` fields, directional rules, body text, and linked passages
+- **Editor** — form-based editor for all `@` fields, directional rules, body text, linked passages, and image upload
 - **Raw** — live preview of the generated `.twee` block for the selected passage
 
 ### Passages Tab — Linked-Only Filter
@@ -237,6 +238,25 @@ The Passages tab shows a **context-aware subset** of passages rather than the fu
 - **Show All / Linked Only toggle:** a button in the tab header switches between the filtered view and the complete passage list; the label updates to reflect the current mode
 
 This mirrors the compass's own reachability logic and keeps the list focused on the part of the graph you are actively authoring. Use **Show All** to jump to any passage outside the current linked set.
+
+### Image Upload
+
+Every passage has an **Image** section in the Editor tab:
+
+1. Choose a local image file using the file picker
+2. Click **Upload** — the tool base64-encodes the file and PUTs it to `media/<filename>` in the repo via the GitHub Contents API (using your existing token). If a file with the same name already exists, it is replaced.
+3. A thumbnail preview appears immediately in the Editor
+4. The passage's `@image` field is set to `media/<filename>` and the Raw tab updates instantly
+5. Click **Apply Changes** then **Save** to commit the updated `.twee` (the image file itself is committed to `media/` at upload time, independently of the story save)
+6. Click **Remove** to detach the image from the passage (does not delete the file from `media/`)
+
+Images are stored at `media/<filename>` and referenced in `.twee` as:
+
+```twee
+@image media/filename.jpg
+```
+
+The reader renders the image below the passage body text.
 
 ### iOS / home screen
 The authoring tool includes PWA meta tags and a mobile-optimised layout. Add to iOS home screen for full-screen use.
@@ -257,12 +277,14 @@ The reader is a compiled SugarCube `.html` file. To update it after editing `sto
 
 ## Media Files
 
-Place images and audio in the `media/` directory. Reference by filename only:
+Place images and audio in the `media/` directory. Reference by path from repo root:
 
 ```twee
-@image harbour-terminal.jpg
-@audio ferry-ambient.mp3
+@image media/harbour-terminal.jpg
+@audio media/ferry-ambient.mp3
 ```
+
+Images can be uploaded directly from the authoring tool's Editor tab without leaving the browser. Audio files must be added to `media/` manually or via the GitHub web interface.
 
 ---
 
@@ -301,6 +323,7 @@ Place images and audio in the `media/` directory. Reference by filename only:
 ## Changelog
 
 ### July 2026
+- **Authoring tool:** **Image upload** — Editor tab now includes an Image section for every passage: choose a local file, click Upload to push it to `media/` via the GitHub Contents API, preview the thumbnail inline, and detach with Remove. The `@image media/<filename>` directive is written to the passage and serialised in `.twee` automatically.
 - **Authoring tool:** **Passages tab linked-only filter** — list seeds from the `Start` passage on load; selecting a node permanently expands the visible set with that node's links; **Show All / Linked Only** toggle in the tab header to switch between filtered and full list
 - **Authoring tool:** **New Passage button** in toolbar — creates any passage without requiring a map click; supports non-geo passages (directional variants, stage-two passages, etc.) with an optional tags field; opens a Win95-style modal dialog; Esc/Enter keyboard shortcuts and backdrop-click to dismiss
 - **Authoring tool:** Dedicated **Linked Passages** field with chip UI — links serialised as `[[Name]]` lines, separated from prose body; `parseTwee` extracts existing `[[links]]` from body on load; `applyEdits` migrates any inline `[[links]]` typed in body textarea into the links array automatically
