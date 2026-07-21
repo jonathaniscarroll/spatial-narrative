@@ -1355,21 +1355,8 @@ You are standing inside a geolocated SugarCube story.
 
 The body text is controlled by the nearest resolved geo passage. Links below connect geo nodes to this Start passage -- they appear in the compass panel on load so you can see all your nodes before starting GPS.
 
-[[FerryTerminal]]
-[[ClockTower]]
-[[Waterline]]
-[[Resolutes Club]]
-[[Irving]]
-[[citadel1]]
-[[radstorm]]
-[[Oteasare_Gorghe_vessesscen]]
-[[G8_WorldTradeCentre]]
-[[G8_GrandParade]]
-[[G8_Commons]]
-[[G8_Harbourfront]]
-[[G8_CitadelLookout]]
-[[G8_RoutePoint]]
-[[Academy]]
+[[Halifax]]
+[[Sydney]]
 
 :: FerryTerminal [geo harbour]
 @geo 44.6488,-63.5752,45
