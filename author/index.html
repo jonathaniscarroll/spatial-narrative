@@ -125,6 +125,14 @@
   @media (max-width: 600px) {
     #passageSearch { font-size: 13px; padding: 4px 6px; }
   }
+  .image-preview {
+    max-width: 100%; max-height: 120px; border: 2px solid var(--win-dark);
+    display: block; margin-top: 4px; object-fit: cover;
+  }
+  .image-row { display: flex; flex-direction: column; gap: 4px; }
+  .image-upload-controls { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+  .image-filename { font-size: 11px; color: #555; font-style: italic; }
+  #imageUploadProgress { font-size: 11px; color: #000080; display: none; }
 </style>
 </head>
 <body>
@@ -219,7 +227,7 @@ let passages = [];
 let selectedIndex = null;
 let fileSha = null;
 let markers = {};
-let linkedNodeSet = new Set(); // passage names reachable via links
+let linkedNodeSet = new Set();
 let showAllPassages = false;
 let activePopup = null;
 
@@ -278,7 +286,7 @@ map.on('click', function(e) {
     const name = nameInput ? nameInput.value.trim() : '';
     if (!name) { nameInput.style.outline = '2px solid red'; return; }
     passages.push({ name, tags: ['geo'], lat: parseFloat(lat), lng: parseFloat(lng),
-      radius: 20, lede: '', dwell: 12000, after: null, then: null, facing: null, dirs: [], links: [], body: '' });
+      radius: 20, lede: '', dwell: 12000, after: null, then: null, facing: null, dirs: [], links: [], body: '', image: null });
     map.closePopup(activePopup); activePopup = null;
     const i = passages.length - 1;
     buildMarkers(); renderPassageList('');
@@ -341,11 +349,10 @@ function createPassageObject(name, tags) {
     lede: '',
     dwell: isGeo ? 12000 : null,
     after: null, then: null, facing: null,
-    dirs: [], links: [], body: ''
+    dirs: [], links: [], body: '', image: null
   };
 }
 
-// Creates a new passage and returns its index.
 function addPassage(name, tags) {
   if (!name) return null;
   const p = createPassageObject(name, tags);
@@ -370,10 +377,6 @@ function createNewPassage() {
 }
 
 // ── Passage select helper ──────────────────────────────────────────────────
-// Returns a <select> element. When the user picks "— New passage… —" they are
-// prompted for a name; the new passage is created immediately and the select's
-// value is updated to that name. The onChange callback receives the
-// chosen passage name (never with the sentinel value).
 function buildPassageSelect(currentValue, excludeIndex, onChange) {
   const sel = document.createElement('select');
   sel.className = 'passage-select';
@@ -382,13 +385,11 @@ function buildPassageSelect(currentValue, excludeIndex, onChange) {
   blank.value = ''; blank.textContent = '— select —';
   sel.appendChild(blank);
 
-  // "New passage…" sentinel — always at the top after blank
   const newOpt = document.createElement('option');
   newOpt.value = '__new__';
   newOpt.textContent = '— New passage… —';
   sel.appendChild(newOpt);
 
-  // All existing passages except the one being edited
   passages.forEach((p, i) => {
     if (i === excludeIndex) return;
     const opt = document.createElement('option');
@@ -424,10 +425,9 @@ function buildPassageSelect(currentValue, excludeIndex, onChange) {
   return sel;
 }
 
-// Rebuilds the <option> list of an existing passage select in-place.
 function refreshPassageSelect(sel, excludeIndex) {
   const current = sel.value;
-  while (sel.options.length > 2) sel.remove(2); // keep blank + __new__
+  while (sel.options.length > 2) sel.remove(2);
   passages.forEach((p, i) => {
     if (i === excludeIndex) return;
     const opt = document.createElement('option');
@@ -458,7 +458,7 @@ function parseTwee(text) {
     const name = tagMatch ? tagMatch[1].trim() : header;
     const tags = tagMatch ? tagMatch[2].split(/\s+/).filter(Boolean) : [];
 
-    let lat = null, lng = null, radius = 30, lede = '', dwell = null, after = null, then_ = null, facing = null;
+    let lat = null, lng = null, radius = 30, lede = '', dwell = null, after = null, then_ = null, facing = null, image = null;
     const dirs = [];
     const lines = body_raw.split('\n');
     const bodyLines = [];
@@ -470,6 +470,7 @@ function parseTwee(text) {
         const parts = t.slice(5).split(',');
         lat = parseFloat(parts[0]); lng = parseFloat(parts[1]);
         if (parts[2]) radius = parseFloat(parts[2]);
+      } else if (t.startsWith('@image ')) { image = t.slice(7).trim();
       } else if (t.startsWith('@lede ')) { lede = t.slice(6).trim();
       } else if (t.startsWith('@dwell ')) { dwell = parseInt(t.slice(7).trim(), 10);
       } else if (t.startsWith('@after ')) { after = parseInt(t.slice(7).trim(), 10);
@@ -490,13 +491,11 @@ function parseTwee(text) {
       }
     }
 
-    // Special passages (script, stylesheet, StoryData, StoryInit, StoryTitle) must
-    // be preserved verbatim. Detect them by name.
     const specialNames = ['StoryData','StoryInit','StoryTitle','StoryBanner','StoryCaption','StoryMenu','StoryShare','StorySettings','StoryAuthor','StorySubtitle'];
     const isSpecial = specialNames.includes(name) || tags.includes('script') || tags.includes('stylesheet');
 
     const body = bodyLines.join('\n').trim();
-    return { name, tags, lat, lng, radius, lede, dwell, after, then: then_, facing, dirs, links, body, _raw: block, isSpecial };
+    return { name, tags, lat, lng, radius, lede, dwell, after, then: then_, facing, dirs, links, body, image, _raw: block, isSpecial };
   });
 }
 
@@ -508,6 +507,7 @@ function serializePassage(p) {
   if (p.tags.includes('geo') && isFinite(p.lat) && isFinite(p.lng)) {
     out += '@geo ' + p.lat + ',' + p.lng + ',' + (p.radius ?? 30) + '\n';
   }
+  if (p.image) out += '@image ' + p.image + '\n';
   if (p.lede) out += '@lede ' + p.lede + '\n';
   if (p.dwell != null) out += '@dwell ' + p.dwell + '\n';
   if (p.after != null) out += '@after ' + p.after + '\n';
@@ -557,7 +557,6 @@ function buildMarkers() {
   });
 }
 
-// Seeds linkedNodeSet from the Start passage links, then keeps expanding as nodes are selected.
 function initLinkedSet() {
   linkedNodeSet = new Set();
   const startPassage = passages.find(p => p.name === 'Start');
@@ -584,7 +583,6 @@ function renderPassageList(filter) {
 
 function selectPassage(i) {
   selectedIndex = i;
-  // Expand linkedNodeSet with this passage's links
   const _sp = passages[i];
   if (_sp) {
     linkedNodeSet.add(_sp.name);
@@ -596,6 +594,69 @@ function selectPassage(i) {
   if (isMobile()) { setMobileView('editor'); } else { switchTab('editor'); }
   const p = passages[i];
   if (isFinite(p.lat) && isFinite(p.lng)) map.panTo([p.lat, p.lng]);
+}
+
+// ── Image upload to GitHub ────────────────────────────────────────────────
+async function uploadImageToGitHub(file) {
+  const token = getToken();
+  if (!token) { showNotice('Enter a GitHub token before uploading images.', 'error'); return null; }
+
+  const progress = document.getElementById('imageUploadProgress');
+  if (progress) { progress.style.display = 'block'; progress.textContent = 'Uploading…'; }
+
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      try {
+        const base64 = ev.target.result.split(',')[1];
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const mediaPath = 'media/' + safeName;
+
+        // Check if file already exists (to get its SHA for update)
+        let existingSha = null;
+        try {
+          const check = await fetch(
+            `https://api.github.com/repos/${OWNER}/${REPO}/contents/${mediaPath}?ref=${BRANCH}`,
+            { headers: { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github.v3+json' } }
+          );
+          if (check.ok) {
+            const existing = await check.json();
+            existingSha = existing.sha;
+          }
+        } catch (_) {}
+
+        const body = {
+          message: 'Add image ' + safeName + ' via authoring tool',
+          content: base64,
+          branch: BRANCH
+        };
+        if (existingSha) body.sha = existingSha;
+
+        const res = await fetch(
+          `https://api.github.com/repos/${OWNER}/${REPO}/contents/${mediaPath}`,
+          {
+            method: 'PUT',
+            headers: {
+              'Authorization': 'token ' + token,
+              'Accept': 'application/vnd.github.v3+json',
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(body)
+          }
+        );
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.message || 'HTTP ' + res.status);
+        }
+        if (progress) { progress.style.display = 'none'; }
+        resolve(mediaPath);
+      } catch (e) {
+        if (progress) { progress.style.display = 'none'; }
+        reject(e);
+      }
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 // ── Render the links chips UI ──────────────────────────────────────────────
@@ -681,6 +742,10 @@ function renderEditor() {
   const isGeo = p.tags.includes('geo');
   if (!Array.isArray(p.links)) p.links = [];
 
+  const imagePreviewHtml = p.image
+    ? `<img class="image-preview" src="https://raw.githubusercontent.com/${OWNER}/${REPO}/${BRANCH}/${p.image}" alt="passage image">`
+    : '';
+
   panel.innerHTML = `
     <div class="field-row">
       <label>Passage Name</label>
@@ -718,7 +783,6 @@ function renderEditor() {
     </div>
     <div class="field-row" id="thenRow">
       <label>Then (second-stage passage)</label>
-      <!-- passage select injected by JS below -->
     </div>
     <div class="field-row">
       <label>Directional Variants (@dir)</label>
@@ -734,10 +798,20 @@ function renderEditor() {
       <label>Body Text (prose only — links are managed below)</label>
       <textarea id="f_body" rows="6">${escHtml(p.body ?? '')}</textarea>
     </div>
+    <div class="field-row image-row" id="imageRow">
+      <label>Image <span style="font-weight:normal;font-style:italic;text-transform:none;">(uploaded to media/, stored as @image)</span></label>
+      ${imagePreviewHtml}
+      <div class="image-upload-controls">
+        <input type="file" id="imageFileInput" accept="image/*" style="font-size:11px;flex:1;">
+        <button class="btn primary" id="uploadImageBtn">Upload</button>
+        ${p.image ? '<button class="btn danger" id="removeImageBtn">Remove</button>' : ''}
+      </div>
+      <span class="image-filename" id="imageFilename">${p.image ? p.image : 'No image set'}</span>
+      <span id="imageUploadProgress"></span>
+    </div>
     <div class="field-row" id="linksRow">
       <label>Linked Passages <span style="font-weight:normal;font-style:italic;text-transform:none;">(appear in compass; serialised as [[Name]])</span></label>
       <div class="link-chips" id="linkChips"></div>
-      <!-- passage select injected by JS below -->
     </div>
     <button class="btn primary" id="applyBtn" style="margin-bottom:8px;">Apply Changes</button>
   `;
@@ -757,7 +831,6 @@ function renderEditor() {
     thenRow.appendChild(thenSel);
     thenRow.appendChild(hint);
 
-    // ── Inject @dir rows ─────────────────────────────────────────────────
     const dirRules = document.getElementById('dirRules');
     p.dirs.forEach((d, di) => {
       dirRules.appendChild(buildDirRow(d, di));
@@ -772,6 +845,58 @@ function renderEditor() {
     });
   }
 
+  // ── Image upload handler ──────────────────────────────────────────────────
+  document.getElementById('uploadImageBtn').addEventListener('click', async () => {
+    const fileInput = document.getElementById('imageFileInput');
+    if (!fileInput.files || !fileInput.files[0]) {
+      showNotice('Choose an image file first.', 'error'); return;
+    }
+    const file = fileInput.files[0];
+    setStatus('Uploading image "' + file.name + '"…');
+    try {
+      const mediaPath = await uploadImageToGitHub(file);
+      if (mediaPath) {
+        passages[selectedIndex].image = mediaPath;
+        updateRawPreview();
+        setStatus('Image uploaded to ' + mediaPath + '. Apply + Save to commit.');
+        showNotice('Image uploaded: ' + mediaPath, 'success');
+        document.getElementById('imageFilename').textContent = mediaPath;
+        // Show preview
+        const existing = document.querySelector('.image-preview');
+        if (existing) existing.remove();
+        const img = document.createElement('img');
+        img.className = 'image-preview';
+        img.src = 'https://raw.githubusercontent.com/' + OWNER + '/' + REPO + '/' + BRANCH + '/' + mediaPath;
+        img.alt = 'passage image';
+        document.getElementById('imageRow').insertBefore(img, document.querySelector('.image-upload-controls'));
+        // Add remove button if not present
+        if (!document.getElementById('removeImageBtn')) {
+          const rmBtn = document.createElement('button');
+          rmBtn.className = 'btn danger'; rmBtn.id = 'removeImageBtn'; rmBtn.textContent = 'Remove';
+          rmBtn.addEventListener('click', removeImage);
+          document.querySelector('.image-upload-controls').appendChild(rmBtn);
+        }
+      }
+    } catch (e) {
+      showNotice('Image upload failed: ' + e.message, 'error');
+      setStatus('Image upload failed.');
+    }
+  });
+
+  // ── Remove image handler ──────────────────────────────────────────────────
+  function removeImage() {
+    passages[selectedIndex].image = null;
+    updateRawPreview();
+    document.getElementById('imageFilename').textContent = 'No image set';
+    const preview = document.querySelector('.image-preview');
+    if (preview) preview.remove();
+    const rmBtn = document.getElementById('removeImageBtn');
+    if (rmBtn) rmBtn.remove();
+    setStatus('Image removed from passage. Apply + Save to commit.');
+  }
+  const rmBtnEl = document.getElementById('removeImageBtn');
+  if (rmBtnEl) rmBtnEl.addEventListener('click', removeImage);
+
   // ── Inject Linked Passages select ────────────────────────────────────────
   const linksRow = document.getElementById('linksRow');
   const linkSel = buildPassageSelect('', selectedIndex, (name) => {
@@ -784,7 +909,6 @@ function renderEditor() {
       updateRawPreview();
       setStatus('Linked "' + name + '" to "' + p2.name + '". Apply + Save to commit.');
     }
-    // Reset select back to blank after adding
     linkSel.value = '';
   });
   linkSel.id = 'linkAddSel';
@@ -794,7 +918,6 @@ function renderEditor() {
   linksRow.appendChild(linkSel);
   linksRow.appendChild(linkHint);
 
-  // Populate chips
   renderLinkChips();
 
   document.getElementById('applyBtn').addEventListener('click', applyEdits);
@@ -813,6 +936,7 @@ function applyEdits() {
     if (!p.links.includes(l)) p.links.push(l);
   });
   p.body = rawBody.replace(/\[\[[^\]]+\]\]\s*/g, '').trim();
+  // image is already updated live on upload; preserve it
   if (p.tags.includes('geo')) {
     const latVal = parseFloat(document.getElementById('f_lat').value);
     const lngVal = parseFloat(document.getElementById('f_lng').value);
@@ -825,7 +949,6 @@ function applyEdits() {
     p.after = isFinite(afterVal) ? afterVal : null;
     const facingVal = parseFloat(document.getElementById('f_facing').value);
     p.facing = isFinite(facingVal) ? facingVal : null;
-    // Update dirs from inputs
     const dirRows = document.querySelectorAll('.dir-row');
     p.dirs = [];
     dirRows.forEach(row => {
@@ -848,7 +971,6 @@ function updateRawPreview() {
   document.getElementById('rawPreview').value = serializePassage(passages[selectedIndex]);
 }
 
-// ── Cursor position helper for textarea ──────────────────────────────────
 function insertAtCursor(textarea, text) {
   const start = textarea.selectionStart ?? textarea.value.length;
   const end = textarea.selectionEnd ?? textarea.value.length;
@@ -924,8 +1046,6 @@ async function saveFile() {
     setStatus('Saved to story/main.twee.');
   } catch(e) { showNotice('Save failed: ' + e.message, 'error'); setStatus('Save failed.'); }
 }
-
-function deletePassageHandler() { deletePassage(); }
 
 function escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
