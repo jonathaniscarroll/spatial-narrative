@@ -1,1 +1,948 @@
-$(cat /tmp/author_index.html)
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Spatial Narrative Author</title>
+<link rel="manifest" href="./manifest.json">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  :root {
+    --win: #c0c0c0;
+    --win-dark: #808080;
+    --win-light: #ffffff;
+    --navy: #000080;
+    --panel: #d4d0c8;
+    --btn-face: #d4d0c8;
+    --inset: inset 2px 2px 0 #808080, inset -2px -2px 0 #ffffff;
+    --raised: inset -2px -2px 0 #808080, inset 2px 2px 0 #ffffff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size: 13px; background: var(--win); color: #000; }
+  body { display: flex; flex-direction: column; }
+  .titlebar { background: linear-gradient(to right, #000080, #1084d0); color: white; padding: 3px 6px; font-weight: bold; font-size: 12px; display: flex; align-items: center; gap: 6px; flex-shrink: 0; user-select: none; }
+  .toolbar { display: flex; align-items: center; gap: 4px; padding: 4px 6px; background: var(--panel); border-bottom: 1px solid var(--win-dark); flex-shrink: 0; flex-wrap: wrap; }
+  .btn { background: var(--btn-face); border: none; box-shadow: var(--raised); padding: 3px 10px; cursor: pointer; font-size: 12px; min-height: 24px; }
+  .btn:active { box-shadow: var(--inset); }
+  .btn.primary { font-weight: bold; }
+  .btn.danger { color: #800000; }
+  .main { display: flex; flex: 1; overflow: hidden; }
+  #map { flex: 1; height: 100%; cursor: crosshair; }
+  .sidebar {
+    width: 300px; display: flex; flex-direction: column;
+    border-left: 2px solid var(--win-dark);
+    background: var(--panel);
+    overflow: hidden;
+  }
+  @media (max-width: 600px) {
+    .main { position: relative; }
+    #map { position: absolute; inset: 0; }
+    #map.panel-hidden { opacity: 0; pointer-events: none; }
+    .sidebar {
+      position: absolute; inset: 0;
+      width: 100%; border-left: none;
+      background: var(--panel);
+    }
+    .sidebar.panel-hidden { transform: translateX(100%); }
+  }
+  .tab-bar { display: flex; background: var(--panel); border-bottom: 2px solid var(--win-dark); flex-shrink: 0; }
+  .tab { padding: 4px 10px; cursor: pointer; font-size: 12px; border-right: 1px solid var(--win-dark); user-select: none; }
+  .tab.active { background: var(--win-light); font-weight: bold; border-bottom: 2px solid var(--win-light); margin-bottom: -2px; }
+  .tab-content { display: none; flex: 1; overflow-y: auto; }
+  .tab-content.active { display: flex; }
+  .passage-list {
+    display: flex; flex-direction: column; gap: 2px;
+    overflow-y: auto;
+  }
+  .passage-item {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 4px 6px; cursor: pointer;
+    border: 1px solid transparent;
+    border-radius: 0;
+    font-size: 12px;
+  }
+  .passage-item:active, .passage-item:hover { background: var(--navy); color: #fff; }
+  .passage-item.selected { background: var(--navy); color: #fff; }
+  .passage-item .ptags {
+    font-size: 10px; opacity: 0.7; margin-left: 6px; white-space: nowrap;
+  }
+  .editor-panel {
+    padding: 8px; display: flex; flex-direction: column; gap: 8px;
+    overflow-y: auto; flex: 1;
+    background: var(--panel);
+  }
+  .field-row { display: flex; flex-direction: column; gap: 3px; }
+  .field-row label { font-weight: bold; font-size: 11px; text-transform: uppercase; }
+  input[type="text"], input[type="number"], textarea, select {
+    border: none; box-shadow: var(--inset); background: #fff;
+    padding: 3px 5px; font-size: 12px; font-family: inherit; width: 100%;
+  }
+  textarea { resize: vertical; min-height: 80px; }
+  .coord-hint { font-size: 10px; color: #555; }
+  .link-hint { font-size: 10px; color: #555; margin-top: 2px; }
+  .section-label {
+    font-size: 11px; font-weight: bold; text-transform: uppercase;
+    color: #555; padding: 2px 0 4px 0; border-bottom: 1px solid var(--win-dark);
+  }
+  .statusbar { background: var(--panel); border-top: 2px solid var(--win-dark); padding: 3px 8px; font-size: 11px; display: flex; justify-content: space-between; flex-shrink: 0; }
+  .notice { background: #fffbe6; border: 1px solid #e0c000; padding: 6px 8px; font-size: 12px; border-radius: 2px; }
+  .map-popup input { width: 100%; margin: 6px 0; }
+  .popup-title { font-weight: bold; font-size: 13px; margin-bottom: 4px; }
+  .popup-coords { font-size: 11px; color: #555; margin-bottom: 4px; }
+  .popup-actions { display: flex; gap: 6px; margin-top: 6px; }
+  .notice-bar { display: none; padding: 4px 10px; font-size: 12px; font-weight: bold; flex-shrink: 0; }
+  .notice-bar.success { background: #d4edda; color: #155724; border-bottom: 1px solid #c3e6cb; }
+  .notice-bar.error { background: #f8d7da; color: #721c24; border-bottom: 1px solid #f5c6cb; }
+  .hint { font-size: 10px; color: #555; }
+  .link-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
+  .link-chip { background: var(--navy); color: #fff; border-radius: 2px; padding: 2px 6px; font-size: 11px; display: inline-flex; align-items: center; gap: 4px; }
+  .link-chip .remove-link { background: none; border: none; color: #fff; cursor: pointer; font-size: 11px; padding: 0; line-height: 1; }
+  .dir-rules { display: flex; flex-direction: column; gap: 4px; }
+  .dir-row { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+  .dir-row input[type="number"] { width: 60px; }
+  .dir-row .dir-sep { font-size: 11px; }
+  .dir-row .dir-target { flex: 1; min-width: 80px; }
+  .token-row { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; padding: 4px 6px; background: var(--panel); border-bottom: 1px solid var(--win-dark); flex-shrink: 0; }
+  .token-row label { font-size: 11px; font-weight: bold; white-space: nowrap; }
+  .token-row input { flex: 1; min-width: 80px; font-size: 11px; }
+  .new-passage-form { background: var(--panel); border: 2px solid var(--win-dark); padding: 8px; margin: 4px; display: none; flex-direction: column; gap: 6px; }
+  .new-passage-form.visible { display: flex; }
+  .new-passage-form label { font-size: 11px; font-weight: bold; text-transform: uppercase; }
+  .bottom-nav { display: none; background: var(--panel); border-top: 2px solid var(--win-dark); flex-shrink: 0; }
+  @media (max-width: 600px) {
+    .bottom-nav { display: flex; }
+  }
+  .bnav-btn { flex: 1; background: var(--btn-face); border: none; border-right: 1px solid var(--win-dark); padding: 6px 4px; font-size: 11px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .bnav-btn:last-child { border-right: none; }
+  .bnav-btn.active { background: var(--navy); color: #fff; }
+  .bnav-icon { font-size: 16px; }
+  #passageSearch {
+    border: none; box-shadow: var(--inset); background: #fff;
+    padding: 4px 6px; font-size: 12px; font-family: inherit; width: 100%;
+  }
+  @media (max-width: 600px) {
+    #passageSearch { font-size: 13px; padding: 4px 6px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="titlebar">
+  🗺 Spatial Narrative Author
+</div>
+
+<div class="notice-bar" id="noticeBar"></div>
+
+<div class="token-row">
+  <label for="ghToken">GitHub Token:</label>
+  <input type="password" id="ghToken" placeholder="ghp_..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+  <button class="btn primary" id="loadBtn" title="Load story/main.twee from GitHub">Load</button>
+  <button class="btn primary" id="saveBtn" title="Save story/main.twee to GitHub">Save</button>
+  <input type="text" id="commitMsgInput" placeholder="Commit message (optional)" autocorrect="off" autocapitalize="off" spellcheck="false" style="min-width:120px;flex:2;">
+</div>
+
+<div class="toolbar">
+  <button class="btn" id="newPassageBtn" title="Create a new passage (no map placement required)">New Passage</button>
+  <button class="btn danger" id="deleteBtn" title="Delete selected passage">Delete</button>
+  <div class="new-passage-form" id="newPassageForm">
+    <label for="npName">Passage Name</label>
+    <input type="text" id="npName" placeholder="e.g. The Garden" autocorrect="off" autocapitalize="off" spellcheck="false">
+    <label for="npTags">Tags</label>
+    <input type="text" id="npTags" placeholder="e.g. geo  — leave blank for a non-geo passage" autocorrect="off" autocapitalize="off" spellcheck="false">
+    <span class="hint">Omit <code>geo</code> for directional variants, stage-two passages, and any passage without a map location.</span>
+    <div style="display:flex;gap:6px;">
+      <button class="btn primary" id="npCreateBtn">Create</button>
+      <button class="btn" id="npCancelBtn">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="main">
+  <div id="map"></div>
+
+  <div class="sidebar" id="sidebar">
+    <div class="tab-bar">
+      <div class="tab active" data-tab="passages">Passages</div>
+      <div class="tab" data-tab="editor">Editor</div>
+      <div class="tab" data-tab="raw">Raw</div>
+    </div>
+
+    <div class="tab-content active" id="tab-passages" style="flex-direction:column;padding:8px;gap:6px;">
+      <div class="section-label" style="display:flex;justify-content:space-between;align-items:center;"><span id="passageListLabel">Linked Passages</span><button id="toggleAllPassages" style="font-size:11px;padding:2px 6px;background:#c0c0c0;border:1px solid #808080;cursor:pointer;border-radius:2px;" title="Toggle between linked-only and all passages">Show All</button></div>
+      <input type="text" id="passageSearch" placeholder="Search passages..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+      <div class="passage-list" id="passageList"></div>
+    </div>
+
+    <div class="tab-content" id="tab-editor">
+      <div class="editor-panel" id="editorPanel">
+        <div class="notice">Tap anywhere on the map to place a new geo passage, or use <strong>New Passage</strong> in the toolbar for passages without a map location (directional variants, stage-two passages, etc.).</div>
+      </div>
+    </div>
+
+    <div class="tab-content" id="tab-raw" style="flex-direction:column;padding:8px;gap:6px;">
+      <div class="section-label">Generated .twee block for selected passage</div>
+      <textarea id="rawPreview" style="flex:1;font-family:monospace;font-size:12px;background:#fff;border:2px inset #808080;padding:6px;resize:none;" readonly></textarea>
+    </div>
+  </div>
+</div>
+
+<nav class="bottom-nav" id="bottomNav">
+  <button class="bnav-btn active" data-view="map" id="bnavMap">
+    <span class="bnav-icon">🗺</span>Map
+  </button>
+  <button class="bnav-btn" data-view="passages" id="bnavPassages">
+    <span class="bnav-icon">📋</span>Passages
+  </button>
+  <button class="bnav-btn" data-view="editor" id="bnavEditor">
+    <span class="bnav-icon">✏️</span>Editor
+  </button>
+  <button class="bnav-btn" data-view="raw" id="bnavRaw">
+    <span class="bnav-icon">🔤</span>Raw
+  </button>
+</nav>
+
+<div class="statusbar">
+  <span id="statusText">Load story/main.twee to begin. Click the map to add a geo passage, or use New Passage for non-geo passages.</span>
+  <span id="passageCount"></span>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const OWNER = 'jonathaniscarroll';
+const REPO = 'spatial-narrative';
+const FILE_PATH = 'story/main.twee';
+const BRANCH = 'main';
+
+let passages = [];
+let selectedIndex = null;
+let fileSha = null;
+let markers = {};
+let linkedNodeSet = new Set(); // passage names reachable via links
+let showAllPassages = false;
+let activePopup = null;
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').catch(() => {});
+}
+
+const isMobile = () => window.innerWidth <= 600;
+
+function setMobileView(view) {
+  if (!isMobile()) return;
+  const mapEl = document.getElementById('map');
+  const sidebar = document.getElementById('sidebar');
+  if (view === 'map') {
+    mapEl.classList.remove('panel-hidden');
+    sidebar.classList.add('panel-hidden');
+  } else {
+    mapEl.classList.add('panel-hidden');
+    sidebar.classList.remove('panel-hidden');
+    if (view === 'passages' || view === 'editor' || view === 'raw') switchTab(view);
+  }
+  document.querySelectorAll('.bnav-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.view === view);
+  });
+}
+
+document.querySelectorAll('.bnav-btn').forEach(btn => {
+  btn.addEventListener('click', () => setMobileView(btn.dataset.view));
+});
+
+const map = L.map('map', { tap: true, tapTolerance: 15 }).setView([44.648, -63.575], 15);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '© OpenStreetMap contributors'
+}).addTo(map);
+
+map.on('click', function(e) {
+  if (activePopup) { map.closePopup(activePopup); activePopup = null; }
+  const lat = e.latlng.lat.toFixed(6);
+  const lng = e.latlng.lng.toFixed(6);
+  const container = document.createElement('div');
+  container.className = 'map-popup';
+  container.innerHTML = `
+    <div class="popup-title">New Geo Passage</div>
+    <div class="popup-coords">${lat}, ${lng}</div>
+    <input type="text" id="popupName" placeholder="Passage name" autocorrect="off" autocapitalize="off" spellcheck="false">
+    <div class="popup-actions">
+      <button class="btn primary" id="popupCreate">Create</button>
+      <button class="btn" id="popupCancel">Cancel</button>
+    </div>
+  `;
+  activePopup = L.popup({ closeButton: false, minWidth: 240 })
+    .setLatLng(e.latlng).setContent(container).openOn(map);
+  setTimeout(() => { const input = document.getElementById('popupName'); if (input) input.focus(); }, 50);
+  container.querySelector('#popupCreate').addEventListener('click', () => {
+    const nameInput = document.getElementById('popupName');
+    const name = nameInput ? nameInput.value.trim() : '';
+    if (!name) { nameInput.style.outline = '2px solid red'; return; }
+    passages.push({ name, tags: ['geo'], lat: parseFloat(lat), lng: parseFloat(lng),
+      radius: 20, lede: '', dwell: 12000, after: null, then: null, facing: null, dirs: [], links: [], body: '' });
+    map.closePopup(activePopup); activePopup = null;
+    const i = passages.length - 1;
+    buildMarkers(); renderPassageList('');
+    selectPassage(i);
+    setStatus('Created "' + name + '" at ' + lat + ', ' + lng + '.');
+  });
+  container.querySelector('#popupCancel').addEventListener('click', () => {
+    map.closePopup(activePopup); activePopup = null;
+  });
+  const nameInput = container.querySelector('#popupName');
+  if (nameInput) {
+    nameInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter') container.querySelector('#popupCreate').click();
+      if (e.key === 'Escape') container.querySelector('#popupCancel').click();
+    });
+  }
+});
+
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === 'tab-' + name));
+}
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => switchTab(tab.dataset.tab));
+});
+
+function getToken() { return document.getElementById('ghToken').value.trim(); }
+
+function setStatus(msg) { document.getElementById('statusText').textContent = msg; }
+
+let noticeTimer = null;
+function showNotice(msg, type) {
+  const bar = document.getElementById('noticeBar');
+  bar.textContent = msg;
+  bar.className = 'notice-bar ' + type;
+  bar.style.display = 'block';
+  clearTimeout(noticeTimer);
+  noticeTimer = setTimeout(() => { bar.style.display = 'none'; }, 4000);
+}
+
+// ── New Passage Form ──────────────────────────────────────────────────────
+document.getElementById('newPassageBtn').addEventListener('click', () => {
+  const form = document.getElementById('newPassageForm');
+  form.classList.toggle('visible');
+  if (form.classList.contains('visible')) document.getElementById('npName').focus();
+});
+document.getElementById('npCancelBtn').addEventListener('click', () => {
+  document.getElementById('newPassageForm').classList.remove('visible');
+});
+document.getElementById('npCreateBtn').addEventListener('click', createNewPassage);
+document.getElementById('npName').addEventListener('keydown', e => { if (e.key === 'Enter') createNewPassage(); });
+
+// ── Create passage helper ─────────────────────────────────────────────────
+function createPassageObject(name, tags) {
+  const isGeo = tags.includes('geo');
+  return {
+    name, tags,
+    lat: null, lng: null,
+    radius: isGeo ? 20 : null,
+    lede: '',
+    dwell: isGeo ? 12000 : null,
+    after: null, then: null, facing: null,
+    dirs: [], links: [], body: ''
+  };
+}
+
+// Creates a new passage and returns its index.
+function addPassage(name, tags) {
+  if (!name) return null;
+  const p = createPassageObject(name, tags);
+  passages.push(p);
+  buildMarkers();
+  renderPassageList('');
+  return passages.length - 1;
+}
+
+function createNewPassage() {
+  const nameInput = document.getElementById('npName');
+  const name = nameInput.value.trim();
+  if (!name) { nameInput.style.outline = '2px solid red'; return; }
+  const tagsRaw = document.getElementById('npTags').value.trim();
+  const tags = tagsRaw ? tagsRaw.split(/\s+/).filter(Boolean) : [];
+  const i = addPassage(name, tags);
+  if (i === null) return;
+  document.getElementById('newPassageForm').classList.remove('visible');
+  nameInput.value = ''; document.getElementById('npTags').value = '';
+  selectPassage(i);
+  setStatus('Created passage "' + name + '"' + (tags.includes('geo') ? ' (geo, no coordinates yet — set lat/lng in the Editor).' : ' (non-geo).'));
+}
+
+// ── Passage select helper ──────────────────────────────────────────────────
+// Returns a <select> element. When the user picks "— New passage… —" they are
+// prompted for a name; the new passage is created immediately and the select's
+// value is updated to that name. The onChange callback receives the
+// chosen passage name (never with the sentinel value).
+function buildPassageSelect(currentValue, excludeIndex, onChange) {
+  const sel = document.createElement('select');
+  sel.className = 'passage-select';
+
+  const blank = document.createElement('option');
+  blank.value = ''; blank.textContent = '— select —';
+  sel.appendChild(blank);
+
+  // "New passage…" sentinel — always at the top after blank
+  const newOpt = document.createElement('option');
+  newOpt.value = '__new__';
+  newOpt.textContent = '— New passage… —';
+  sel.appendChild(newOpt);
+
+  // All existing passages except the one being edited
+  passages.forEach((p, i) => {
+    if (i === excludeIndex) return;
+    const opt = document.createElement('option');
+    opt.value = p.name;
+    opt.textContent = p.name;
+    if (p.name === currentValue) opt.selected = true;
+    sel.appendChild(opt);
+  });
+
+  if (currentValue && !passages.find(p => p.name === currentValue)) {
+    const opt = document.createElement('option');
+    opt.value = currentValue; opt.textContent = currentValue + ' (missing)'; opt.selected = true;
+    sel.appendChild(opt);
+  }
+
+  sel.addEventListener('change', () => {
+    if (sel.value === '__new__') {
+      const parent = passages[selectedIndex];
+      const suggested = parent ? parent.name + ' (variant)' : '';
+      const name = window.prompt('New passage name:', suggested);
+      if (!name || !name.trim()) { sel.value = currentValue || ''; return; }
+      const trimmed = name.trim();
+      if (!passages.find(p => p.name === trimmed)) {
+        addPassage(trimmed, []);
+        refreshPassageSelect(sel, excludeIndex);
+      }
+      sel.value = trimmed;
+      onChange(trimmed);
+    } else {
+      onChange(sel.value);
+    }
+  });
+  return sel;
+}
+
+// Rebuilds the <option> list of an existing passage select in-place.
+function refreshPassageSelect(sel, excludeIndex) {
+  const current = sel.value;
+  while (sel.options.length > 2) sel.remove(2); // keep blank + __new__
+  passages.forEach((p, i) => {
+    if (i === excludeIndex) return;
+    const opt = document.createElement('option');
+    opt.value = p.name; opt.textContent = p.name;
+    if (p.name === current) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+
+// ── Parse .twee ──────────────────────────────────────────────────────────
+function extractLinks(body) {
+  const re = /\[\[([^\]|]+?)(?:\|[^\]]+)?\]\]/g;
+  const links = [];
+  let m;
+  while ((m = re.exec(body)) !== null) {
+    links.push(m[1].trim());
+  }
+  return links;
+}
+
+function parseTwee(text) {
+  const blocks = text.split(/^:: /m).filter(s => s.trim());
+  return blocks.map(block => {
+    const nl = block.indexOf('\n');
+    const header = nl >= 0 ? block.slice(0, nl).trim() : block.trim();
+    const body_raw = nl >= 0 ? block.slice(nl + 1) : '';
+    const tagMatch = header.match(/^(.+?)\s*\[([^\]]*)\]$/);
+    const name = tagMatch ? tagMatch[1].trim() : header;
+    const tags = tagMatch ? tagMatch[2].split(/\s+/).filter(Boolean) : [];
+
+    let lat = null, lng = null, radius = 30, lede = '', dwell = null, after = null, then_ = null, facing = null;
+    const dirs = [];
+    const lines = body_raw.split('\n');
+    const bodyLines = [];
+    const links = [];
+
+    for (const line of lines) {
+      const t = line.trim();
+      if (t.startsWith('@geo ')) {
+        const parts = t.slice(5).split(',');
+        lat = parseFloat(parts[0]); lng = parseFloat(parts[1]);
+        if (parts[2]) radius = parseFloat(parts[2]);
+      } else if (t.startsWith('@lede ')) { lede = t.slice(6).trim();
+      } else if (t.startsWith('@dwell ')) { dwell = parseInt(t.slice(7).trim(), 10);
+      } else if (t.startsWith('@after ')) { after = parseInt(t.slice(7).trim(), 10);
+      } else if (t.startsWith('@then ')) { then_ = t.slice(6).trim();
+      } else if (t.startsWith('@facing ')) { facing = parseFloat(t.slice(8).trim());
+      } else if (t.startsWith('@dir ')) {
+        const pair = t.slice(5).split(':');
+        if (pair.length === 2) {
+          const range = pair[0].split('-');
+          dirs.push({ start: parseFloat(range[0]), end: parseFloat(range[1]), target: pair[1].trim() }); }
+      } else if (t.startsWith('<span class="nav-hidden">')) {
+        // skip nav-hidden spans (old format)
+      } else if (t.startsWith('[[') && t.endsWith(']]')) {
+        const linkName = t.slice(2, -2).split('|')[0].trim();
+        if (linkName && !links.includes(linkName)) links.push(linkName);
+      } else {
+        bodyLines.push(line);
+      }
+    }
+
+    // Special passages (script, stylesheet, StoryData, StoryInit, StoryTitle) must
+    // be preserved verbatim. Detect them by name.
+    const specialNames = ['StoryData','StoryInit','StoryTitle','StoryBanner','StoryCaption','StoryMenu','StoryShare','StorySettings','StoryAuthor','StorySubtitle'];
+    const isSpecial = specialNames.includes(name) || tags.includes('script') || tags.includes('stylesheet');
+
+    const body = bodyLines.join('\n').trim();
+    return { name, tags, lat, lng, radius, lede, dwell, after, then: then_, facing, dirs, links, body, _raw: block, isSpecial };
+  });
+}
+
+function serializePassage(p) {
+  if (p.isSpecial) return ':: ' + p._raw.trimEnd() + '\n';
+  let out = ':: ' + p.name;
+  if (p.tags && p.tags.length > 0) out += ' [' + p.tags.join(' ') + ']';
+  out += '\n';
+  if (p.tags.includes('geo') && isFinite(p.lat) && isFinite(p.lng)) {
+    out += '@geo ' + p.lat + ',' + p.lng + ',' + (p.radius ?? 30) + '\n';
+  }
+  if (p.lede) out += '@lede ' + p.lede + '\n';
+  if (p.dwell != null) out += '@dwell ' + p.dwell + '\n';
+  if (p.after != null) out += '@after ' + p.after + '\n';
+  if (p.then) out += '@then ' + p.then + '\n';
+  if (p.facing != null) out += '@facing ' + p.facing + '\n';
+  p.dirs.forEach(d => { out += '@dir ' + d.start + '-' + d.end + ':' + d.target + '\n'; });
+  if (p.body) out += p.body + '\n';
+  if (p.links && p.links.length > 0) {
+    out += '\n' + p.links.map(l => '[[' + l + ']]').join('\n') + '\n';
+  }
+  return out;
+}
+
+function serializeAll() { return passages.map(serializePassage).join('\n'); }
+
+// ── Build map markers ────────────────────────────────────────────────────
+function clearMarkers() { Object.values(markers).forEach(m => map.removeLayer(m)); markers = {}; }
+
+function buildMarkers() {
+  clearMarkers();
+  passages.forEach((p, i) => {
+    if (!p.tags.includes('geo') || !isFinite(p.lat) || !isFinite(p.lng)) return;
+    const isSelected = i === selectedIndex;
+    const icon = L.divIcon({
+      className: '',
+      html: `<div style="width:14px;height:14px;border-radius:50%;background:${isSelected ? '#ff0' : '#000080'};border:2px solid #fff;box-shadow:0 0 3px rgba(0,0,0,0.5);"></div>`,
+      iconSize: [14, 14], iconAnchor: [7, 7]
+    });
+    if (isFinite(p.radius) && p.radius > 0) {
+      L.circle([p.lat, p.lng], { radius: p.radius, color: '#000080', weight: 1, fillOpacity: 0.08 }).addTo(map);
+    }
+    const marker = L.marker([p.lat, p.lng], { icon, draggable: true }).addTo(map);
+    marker.bindTooltip(p.name, { permanent: false, direction: 'top' });
+    marker.on('click', e => {
+      L.DomEvent.stopPropagation(e);
+      selectPassage(i);
+    });
+    marker.on('dragend', e => {
+      const ll = e.target.getLatLng();
+      passages[i].lat = parseFloat(ll.lat.toFixed(6));
+      passages[i].lng = parseFloat(ll.lng.toFixed(6));
+      if (selectedIndex === i) renderEditor();
+      updateRawPreview();
+      setStatus('Moved ' + passages[i].name + ' to ' + passages[i].lat + ', ' + passages[i].lng);
+    });
+    markers[i] = marker;
+  });
+}
+
+// Seeds linkedNodeSet from the Start passage links, then keeps expanding as nodes are selected.
+function initLinkedSet() {
+  linkedNodeSet = new Set();
+  const startPassage = passages.find(p => p.name === 'Start');
+  if (startPassage && Array.isArray(startPassage.links)) {
+    startPassage.links.forEach(name => linkedNodeSet.add(name));
+  }
+  linkedNodeSet.add('Start');
+}
+
+function renderPassageList(filter) {
+  const list = document.getElementById('passageList');
+  list.innerHTML = '';
+  passages.forEach((p, i) => {
+    if (!showAllPassages && linkedNodeSet.size > 0 && !linkedNodeSet.has(p.name)) return;
+    if (filter && !p.name.toLowerCase().includes(filter.toLowerCase())) return;
+    const item = document.createElement('div');
+    item.className = 'passage-item' + (i === selectedIndex ? ' selected' : '');
+    item.innerHTML = '<span>' + escHtml(p.name) + '</span><span class="ptags">' + p.tags.join(' ') + '</span>';
+    item.addEventListener('click', () => selectPassage(i));
+    list.appendChild(item);
+  });
+  document.getElementById('passageCount').textContent = passages.length + ' passages';
+}
+
+function selectPassage(i) {
+  selectedIndex = i;
+  // Expand linkedNodeSet with this passage's links
+  const _sp = passages[i];
+  if (_sp) {
+    linkedNodeSet.add(_sp.name);
+    if (Array.isArray(_sp.links)) _sp.links.forEach(name => linkedNodeSet.add(name));
+  }
+  buildMarkers();
+  renderPassageList(document.getElementById('passageSearch').value);
+  renderEditor(); updateRawPreview();
+  if (isMobile()) { setMobileView('editor'); } else { switchTab('editor'); }
+  const p = passages[i];
+  if (isFinite(p.lat) && isFinite(p.lng)) map.panTo([p.lat, p.lng]);
+}
+
+// ── Render the links chips UI ──────────────────────────────────────────────
+function renderLinkChips() {
+  const p = passages[selectedIndex];
+  const container = document.getElementById('linkChips');
+  if (!container) return;
+  container.innerHTML = '';
+  (p.links || []).forEach((name, li) => {
+    const chip = document.createElement('span');
+    chip.className = 'link-chip';
+    chip.innerHTML = escHtml(name) +
+      '<button class="remove-link" title="Remove link" data-li="' + li + '">✕</button>';
+    chip.querySelector('.remove-link').addEventListener('click', () => {
+      const rowIndex = parseInt(chip.querySelector('.remove-link').dataset.li, 10);
+      if (rowIndex !== -1 && passages[selectedIndex]) {
+        passages[selectedIndex].links.splice(rowIndex, 1);
+        renderLinkChips();
+        updateRawPreview();
+      }
+    });
+    container.appendChild(chip);
+  });
+}
+
+// ── Build a @dir row ──────────────────────────────────────────────────────
+function buildDirRow(d, rowIdx) {
+  const row = document.createElement('div');
+  row.className = 'dir-row';
+  row.dataset.di = rowIdx;
+
+  const startIn = document.createElement('input');
+  startIn.type = 'number'; startIn.className = 'dir-start';
+  startIn.value = d.start; startIn.placeholder = 'start°'; startIn.inputMode = 'numeric';
+  startIn.addEventListener('input', () => { updateRawPreview(); });
+
+  const sep = document.createElement('span');
+  sep.className = 'dir-sep'; sep.textContent = '–';
+
+  const endIn = document.createElement('input');
+  endIn.type = 'number'; endIn.className = 'dir-end';
+  endIn.value = d.end; endIn.placeholder = 'end°'; endIn.inputMode = 'numeric';
+  endIn.addEventListener('input', () => { updateRawPreview(); });
+
+  const targetSel = buildPassageSelect(d.target, selectedIndex, (name) => {
+    const rowIdx2 = parseInt(row.dataset.di, 10);
+    if (rowIdx2 !== -1 && passages[selectedIndex]) {
+      passages[selectedIndex].dirs[rowIdx2] = passages[selectedIndex].dirs[rowIdx2] || {};
+      passages[selectedIndex].dirs[rowIdx2].target = name;
+      updateRawPreview();
+    }
+  });
+  targetSel.className += ' dir-target';
+
+  const delBtn = document.createElement('button');
+  delBtn.className = 'btn danger'; delBtn.textContent = '✕'; delBtn.title = 'Remove this @dir rule';
+  delBtn.addEventListener('click', () => {
+    const rowIdx3 = parseInt(row.dataset.di, 10);
+    if (rowIdx3 !== -1 && passages[selectedIndex]) {
+      passages[selectedIndex].dirs.splice(rowIdx3, 1);
+      const parent = document.getElementById('dirRules');
+      parent.removeChild(row);
+      Array.from(parent.children).forEach((r, newI) => { r.dataset.di = newI; });
+      updateRawPreview();
+    }
+  });
+
+  row.appendChild(startIn);
+  row.appendChild(sep);
+  row.appendChild(endIn);
+  row.appendChild(targetSel);
+  row.appendChild(delBtn);
+  return row;
+}
+
+// ── Render the editor panel ──────────────────────────────────────────────
+function renderEditor() {
+  const panel = document.getElementById('editorPanel');
+  if (selectedIndex === null || !passages[selectedIndex]) {
+    panel.innerHTML = '<div class="notice">No passage selected.</div>'; return;
+  }
+  const p = passages[selectedIndex];
+  const isGeo = p.tags.includes('geo');
+  if (!Array.isArray(p.links)) p.links = [];
+
+  panel.innerHTML = `
+    <div class="field-row">
+      <label>Passage Name</label>
+      <input type="text" id="f_name" value="${escAttr(p.name)}" autocorrect="off" autocapitalize="off" spellcheck="false">
+    </div>
+    <div class="field-row">
+      <label>Tags (space separated)</label>
+      <input type="text" id="f_tags" value="${escAttr(p.tags.join(' '))}" autocorrect="off" autocapitalize="off" spellcheck="false">
+    </div>
+    ${isGeo ? `
+    <div class="field-row">
+      <label>Latitude</label>
+      <input type="number" step="0.000001" id="f_lat" value="${p.lat ?? ''}" inputmode="decimal">
+      <span class="coord-hint">Drag marker on map to update, or type here.</span>
+    </div>
+    <div class="field-row">
+      <label>Longitude</label>
+      <input type="number" step="0.000001" id="f_lng" value="${p.lng ?? ''}" inputmode="decimal">
+    </div>
+    <div class="field-row">
+      <label>Radius (metres)</label>
+      <input type="number" id="f_radius" value="${p.radius ?? 30}" inputmode="numeric">
+    </div>
+    <div class="field-row">
+      <label>Dwell (ms)</label>
+      <input type="number" id="f_dwell" value="${p.dwell ?? ''}" placeholder="12000" inputmode="numeric">
+    </div>
+    <div class="field-row">
+      <label>Facing Threshold (degrees, optional)</label>
+      <input type="number" id="f_facing" value="${p.facing ?? ''}" placeholder="35" inputmode="numeric">
+    </div>
+    <div class="field-row">
+      <label>After (ms until second-stage)</label>
+      <input type="number" id="f_after" value="${p.after ?? ''}" placeholder="leave blank if none" inputmode="numeric">
+    </div>
+    <div class="field-row" id="thenRow">
+      <label>Then (second-stage passage)</label>
+      <!-- passage select injected by JS below -->
+    </div>
+    <div class="field-row">
+      <label>Directional Variants (@dir)</label>
+      <div class="dir-rules" id="dirRules"></div>
+      <button class="btn" id="addDirBtn" style="margin-top:4px;">+ Add @dir Rule</button>
+    </div>
+    ` : ''}
+    <div class="field-row">
+      <label>Lede</label>
+      <input type="text" id="f_lede" value="${escAttr(p.lede ?? '')}">
+    </div>
+    <div class="field-row">
+      <label>Body Text (prose only — links are managed below)</label>
+      <textarea id="f_body" rows="6">${escHtml(p.body ?? '')}</textarea>
+    </div>
+    <div class="field-row" id="linksRow">
+      <label>Linked Passages <span style="font-weight:normal;font-style:italic;text-transform:none;">(appear in compass; serialised as [[Name]])</span></label>
+      <div class="link-chips" id="linkChips"></div>
+      <!-- passage select injected by JS below -->
+    </div>
+    <button class="btn primary" id="applyBtn" style="margin-bottom:8px;">Apply Changes</button>
+  `;
+
+  // ── Inject @then passage select ──────────────────────────────────────────
+  if (isGeo) {
+    const thenRow = document.getElementById('thenRow');
+    const thenSel = buildPassageSelect(p.then || '', selectedIndex, (name) => {
+      passages[selectedIndex].then = name || null;
+      updateRawPreview();
+      if (name) setStatus('Second stage set to "' + name + '". Apply + Save to commit.');
+    });
+    thenSel.id = 'f_then';
+    const hint = document.createElement('span');
+    hint.className = 'coord-hint';
+    hint.textContent = 'Select an existing passage or create a new one for the second stage.';
+    thenRow.appendChild(thenSel);
+    thenRow.appendChild(hint);
+
+    // ── Inject @dir rows ─────────────────────────────────────────────────
+    const dirRules = document.getElementById('dirRules');
+    p.dirs.forEach((d, di) => {
+      dirRules.appendChild(buildDirRow(d, di));
+    });
+
+    document.getElementById('addDirBtn').addEventListener('click', () => {
+      const newDir = { start: 0, end: 45, target: '' };
+      passages[selectedIndex].dirs.push(newDir);
+      const di = passages[selectedIndex].dirs.length - 1;
+      document.getElementById('dirRules').appendChild(buildDirRow(newDir, di));
+      updateRawPreview();
+    });
+  }
+
+  // ── Inject Linked Passages select ────────────────────────────────────────
+  const linksRow = document.getElementById('linksRow');
+  const linkSel = buildPassageSelect('', selectedIndex, (name) => {
+    if (!name) return;
+    const p2 = passages[selectedIndex];
+    if (!Array.isArray(p2.links)) p2.links = [];
+    if (!p2.links.includes(name)) {
+      p2.links.push(name);
+      renderLinkChips();
+      updateRawPreview();
+      setStatus('Linked "' + name + '" to "' + p2.name + '". Apply + Save to commit.');
+    }
+    // Reset select back to blank after adding
+    linkSel.value = '';
+  });
+  linkSel.id = 'linkAddSel';
+  const linkHint = document.createElement('span');
+  linkHint.className = 'link-hint';
+  linkHint.textContent = 'Select a passage to add it as a link. Tap ✕ on a chip to remove.';
+  linksRow.appendChild(linkSel);
+  linksRow.appendChild(linkHint);
+
+  // Populate chips
+  renderLinkChips();
+
+  document.getElementById('applyBtn').addEventListener('click', applyEdits);
+}
+
+function applyEdits() {
+  if (selectedIndex === null) return;
+  const p = passages[selectedIndex];
+  p.name = document.getElementById('f_name').value.trim();
+  p.tags = document.getElementById('f_tags').value.trim().split(/\s+/).filter(Boolean);
+  p.lede = document.getElementById('f_lede').value.trim();
+  const rawBody = document.getElementById('f_body').value;
+  const inlineLinks = extractLinks(rawBody);
+  inlineLinks.forEach(l => {
+    if (!p.links) p.links = [];
+    if (!p.links.includes(l)) p.links.push(l);
+  });
+  p.body = rawBody.replace(/\[\[[^\]]+\]\]\s*/g, '').trim();
+  if (p.tags.includes('geo')) {
+    const latVal = parseFloat(document.getElementById('f_lat').value);
+    const lngVal = parseFloat(document.getElementById('f_lng').value);
+    if (isFinite(latVal)) p.lat = latVal;
+    if (isFinite(lngVal)) p.lng = lngVal;
+    p.radius = parseFloat(document.getElementById('f_radius').value) || 30;
+    const dwellVal = parseInt(document.getElementById('f_dwell').value, 10);
+    p.dwell = isFinite(dwellVal) ? dwellVal : null;
+    const afterVal = parseInt(document.getElementById('f_after').value, 10);
+    p.after = isFinite(afterVal) ? afterVal : null;
+    const facingVal = parseFloat(document.getElementById('f_facing').value);
+    p.facing = isFinite(facingVal) ? facingVal : null;
+    // Update dirs from inputs
+    const dirRows = document.querySelectorAll('.dir-row');
+    p.dirs = [];
+    dirRows.forEach(row => {
+      const s = parseFloat(row.querySelector('.dir-start').value);
+      const e2 = parseFloat(row.querySelector('.dir-end').value);
+      const t = row.querySelector('select').value;
+      if (isFinite(s) && isFinite(e2) && t) p.dirs.push({ start: s, end: e2, target: t });
+    });
+  }
+  buildMarkers();
+  renderPassageList(document.getElementById('passageSearch').value);
+  updateRawPreview();
+  setStatus('Applied changes to "' + p.name + '". Save to commit.');
+}
+
+function updateRawPreview() {
+  if (selectedIndex === null || !passages[selectedIndex]) {
+    document.getElementById('rawPreview').value = ''; return;
+  }
+  document.getElementById('rawPreview').value = serializePassage(passages[selectedIndex]);
+}
+
+// ── Cursor position helper for textarea ──────────────────────────────────
+function insertAtCursor(textarea, text) {
+  const start = textarea.selectionStart ?? textarea.value.length;
+  const end = textarea.selectionEnd ?? textarea.value.length;
+  textarea.value = textarea.value.slice(0, start) + text + textarea.value.slice(end);
+  const newPos = start + text.length;
+  textarea.selectionStart = textarea.selectionEnd = newPos;
+  textarea.focus();
+}
+
+// ── Delete passage ────────────────────────────────────────────────────────
+document.getElementById('deleteBtn').addEventListener('click', deletePassage);
+function deletePassage() {
+  if (selectedIndex === null) { showNotice('Select a passage first.', 'error'); return; }
+  const name = passages[selectedIndex].name;
+  if (!confirm('Delete passage "' + name + '"? This cannot be undone until you reload.')) return;
+  passages.splice(selectedIndex, 1); selectedIndex = null;
+  buildMarkers(); renderPassageList('');
+  document.getElementById('editorPanel').innerHTML = '<div class="notice">Passage deleted. Save to commit.</div>';
+  document.getElementById('rawPreview').value = '';
+  setStatus('Deleted "' + name + '".');
+}
+
+// ── GitHub load/save ────────────────────────────────────────────────────
+function decodeBase64Unicode(str) {
+  return decodeURIComponent(atob(str).split('').map(c =>
+    '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''));
+}
+
+async function loadFile() {
+  const token = getToken();
+  if (!token) { showNotice('Enter a GitHub Personal Access Token first.', 'error'); return; }
+  setStatus('Loading story/main.twee...');
+  try {
+    const res = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/contents/${FILE_PATH}?ref=${BRANCH}`, {
+      headers: { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github.v3+json' }
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    fileSha = data.sha;
+    const decoded = decodeBase64Unicode(data.content.replace(/\n/g, ''));
+    passages = parseTwee(decoded);
+    initLinkedSet();
+    buildMarkers(); renderPassageList('');
+    setStatus('Loaded ' + passages.length + ' passages from story/main.twee.');
+    showNotice('Loaded ' + passages.length + ' passages.', 'success');
+    const geoPassages = passages.filter(p => p.tags.includes('geo') && isFinite(p.lat));
+    if (geoPassages.length > 0) {
+      const lats = geoPassages.map(p => p.lat);
+      const lngs = geoPassages.map(p => p.lng);
+      map.fitBounds([[Math.min(...lats)-0.002, Math.min(...lngs)-0.002],[Math.max(...lats)+0.002, Math.max(...lngs)+0.002]]);
+    }
+  } catch(e) { showNotice('Load failed: ' + e.message, 'error'); setStatus('Load failed.'); }
+}
+
+async function saveFile() {
+  const token = getToken();
+  if (!token) { showNotice('Enter a GitHub Personal Access Token first.', 'error'); return; }
+  if (!fileSha) { showNotice('Load the file first before saving.', 'error'); return; }
+  const msg = document.getElementById('commitMsgInput').value.trim() || 'Update story/main.twee via authoring tool';
+  const content = serializeAll();
+  const encoded = btoa(unescape(encodeURIComponent(content)));
+  setStatus('Saving...');
+  try {
+    const res = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/contents/${FILE_PATH}`, {
+      method: 'PUT',
+      headers: { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github.v3+json', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: msg, content: encoded, sha: fileSha, branch: BRANCH })
+    });
+    if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'HTTP ' + res.status); }
+    const data = await res.json();
+    fileSha = data.content.sha;
+    showNotice('Saved. Commit: ' + data.commit.sha.slice(0,7), 'success');
+    setStatus('Saved to story/main.twee.');
+  } catch(e) { showNotice('Save failed: ' + e.message, 'error'); setStatus('Save failed.'); }
+}
+
+function deletePassageHandler() { deletePassage(); }
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function escAttr(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+document.getElementById('loadBtn').addEventListener('click', loadFile);
+document.getElementById('saveBtn').addEventListener('click', saveFile);
+document.getElementById('passageSearch').addEventListener('input', e => renderPassageList(e.target.value));
+document.getElementById('toggleAllPassages').addEventListener('click', () => {
+  showAllPassages = !showAllPassages;
+  document.getElementById('toggleAllPassages').textContent = showAllPassages ? 'Linked Only' : 'Show All';
+  document.getElementById('passageListLabel').textContent = showAllPassages ? 'All Passages' : 'Linked Passages';
+  renderPassageList(document.getElementById('passageSearch').value);
+});
+</script>
+</body>
+</html>
