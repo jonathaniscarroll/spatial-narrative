@@ -84,6 +84,7 @@
       font-size: 20px;
       line-height: 1.45;
       margin-bottom: 16px;
+      white-space: pre-wrap;
     }
     .meta {
       font-family: Arial, Helvetica, sans-serif;
@@ -232,6 +233,21 @@
       justify-content: space-between;
       gap: 10px;
     }
+    /* ── Passage body links ─────────────────────────────────────────── */
+    .passage-link {
+      color: #0000cc;
+      text-decoration: underline;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: inherit;
+      background: none;
+      border: none;
+      padding: 0;
+    }
+    .passage-link:hover {
+      color: #000080;
+      text-decoration: none;
+    }
     @media (max-width: 760px) {
       table.core, table.core tbody, table.core tr, table.core td { display: block; width: 100%; }
       .passage-title { font-size: 26px; }
@@ -344,11 +360,47 @@
       const inside = ranked.filter(p => p.distance <= p.radius);
       return inside[0] || ranked[0] || null;
     }
+    function navigateTo(name) {
+      const p = story.passages.find(p => p.name === name);
+      if (p) { state.active = p; refresh(); }
+    }
+    function renderBodyWithLinks(text, containerEl) {
+      containerEl.innerHTML = '';
+      const regex = /\[\[(.+?)\]\]/g;
+      let last = 0, match;
+      while ((match = regex.exec(text)) !== null) {
+        if (match.index > last) {
+          containerEl.appendChild(document.createTextNode(text.slice(last, match.index)));
+        }
+        const raw = match[1].trim();
+        let display = raw, target = raw;
+        if (raw.indexOf('->') !== -1) {
+          const parts = raw.split('->');
+          display = parts[0].trim(); target = parts[1].trim();
+        } else if (raw.indexOf('<-') !== -1) {
+          const parts = raw.split('<-');
+          display = parts[1].trim(); target = parts[0].trim();
+        } else if (raw.indexOf('|') !== -1) {
+          const parts = raw.split('|');
+          display = parts[0].trim(); target = parts[1].trim();
+        }
+        const a = document.createElement('a');
+        a.className = 'passage-link';
+        a.href = 'javascript:void(0)';
+        a.textContent = display;
+        a.addEventListener('click', (function(t) { return function() { navigateTo(t); }; })(target));
+        containerEl.appendChild(a);
+        last = match.index + match[0].length;
+      }
+      if (last < text.length) {
+        containerEl.appendChild(document.createTextNode(text.slice(last)));
+      }
+    }
     function renderPassage() {
       if (!state.active) return;
       $('#passageTitle').textContent = state.active.name;
       $('#passageLede').textContent = state.active.lede;
-      $('#passageBody').textContent = state.active.body;
+      renderBodyWithLinks(state.active.body || '', $('#passageBody'));
     }
     function renderHeading() {
       $('#headingLabel').textContent = state.heading == null ? 'Heading unavailable' : Math.round(state.heading) + ' degrees';
