@@ -1760,3 +1760,8 @@ Gravestone of john carroll
 [[Waterline]]
 [[citadel1]]
 [[Academy]]
+
+:: sign 1 [geo]
+@geo 46.143507,-60.189114,20
+@dwell 12000
+Test
