@@ -488,6 +488,24 @@ table.core td {
   color: #000080;
 }
 
+/* ── Passage body links ────────────────────────────────────────── */
+
+.passage-link {
+  color: #0000cc;
+  text-decoration: underline;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+.passage-link:hover {
+  color: #000080;
+  text-decoration: none;
+}
+
 @media (max-width: 760px) {
   table.core, table.core tbody, table.core tr, table.core td {
     display: block;
@@ -1071,6 +1089,47 @@ setup.geo.comments.bindSubmit = function () {
   }
 };
 
+// ── Render passage body with [[Link]] parsing ─────────────────────────────
+setup.geo.renderBodyWithLinks = function (text, containerEl) {
+  containerEl.innerHTML = '';
+  var regex = /\[\[(.+?)\]\]/g;
+  var last  = 0;
+  var match;
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > last) {
+      containerEl.appendChild(document.createTextNode(text.slice(last, match.index)));
+    }
+    var raw     = match[1].trim();
+    var display = raw;
+    var target  = raw;
+    if (raw.indexOf('->') !== -1) {
+      var parts = raw.split('->');
+      display = parts[0].trim();
+      target  = parts[1].trim();
+    } else if (raw.indexOf('<-') !== -1) {
+      var parts = raw.split('<-');
+      display = parts[1].trim();
+      target  = parts[0].trim();
+    } else if (raw.indexOf('|') !== -1) {
+      var parts = raw.split('|');
+      display = parts[0].trim();
+      target  = parts[1].trim();
+    }
+    (function (t, d) {
+      var a = document.createElement('a');
+      a.className   = 'passage-link';
+      a.href        = 'javascript:void(0)';
+      a.textContent = d;
+      a.addEventListener('click', function () { Engine.play(t); });
+      containerEl.appendChild(a);
+    }(target, display));
+    last = match.index + match[0].length;
+  }
+  if (last < text.length) {
+    containerEl.appendChild(document.createTextNode(text.slice(last)));
+  }
+};
+
 // ── Render passage (including image and audio) ────────────────────────────
 setup.geo.renderPassage = function () {
   var titleEl    = document.getElementById('passageTitle');
@@ -1161,7 +1220,7 @@ setup.geo.renderPassage = function () {
 
   if (titleEl)  { titleEl.textContent  = shown.name; }
   if (ledeEl)   { ledeEl.textContent   = shown.lede || ''; }
-  if (bodyEl)   { bodyEl.textContent   = shown.body || ''; }
+  if (bodyEl)   { setup.geo.renderBodyWithLinks(shown.body || '', bodyEl); }
   if (statusEl) {
     statusEl.textContent = 'Active geo node: ' + v.active.name + '. Displayed passage: ' + shown.name + '.';
   }
