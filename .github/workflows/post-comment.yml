@@ -1,0 +1,63 @@
+name: Post Field Note Comment
+
+on:
+  repository_dispatch:
+    types: [post-field-note]
+
+jobs:
+  post-comment:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Post comment to passage issue
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GH_COMMENTS_TOKEN }}
+          script: |
+            const passage = context.payload.client_payload.passage;
+            const text    = context.payload.client_payload.text;
+            const coords  = context.payload.client_payload.coords || null;
+
+            if (!passage || !text || !text.trim()) {
+              core.setFailed('Missing passage or text in payload.');
+              return;
+            }
+
+            const owner = context.repo.owner;
+            const repo  = context.repo.repo;
+            const title = `[passage] ${passage}`;
+
+            let issueNumber = null;
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              owner, repo,
+              state: 'open',
+              labels: 'geo-comment',
+              per_page: 100
+            });
+            const found = issues.find(i => i.title === title);
+
+            if (found) {
+              issueNumber = found.number;
+            } else {
+              const created = await github.rest.issues.create({
+                owner, repo,
+                title,
+                body: `Field notes left by readers at the geo passage **${passage}**. Each comment was posted from within the passage radius.`,
+                labels: ['geo-comment']
+              });
+              issueNumber = created.data.number;
+            }
+
+            let body = text.trim();
+            if (coords) {
+              body += `\n\n---\n*Posted at ${coords}*`;
+            }
+
+            await github.rest.issues.createComment({
+              owner, repo,
+              issue_number: issueNumber,
+              body
+            });
+
+            core.info(`Comment posted to issue #${issueNumber} for passage "${passage}".`);
