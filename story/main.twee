@@ -1824,3 +1824,11 @@ Gravestone of john carroll
 @geo 46.143507,-60.189114,20
 @dwell 12000
 Test
+
+:: library [geo]
+@geo 44.643117,-63.575671,20
+@image media/4249bf6c2068da087c5ceec9c0139fda.jpg
+@dwell 12000
+Go that way for the bird noizs
+
+[[bird noise]]
