@@ -307,28 +307,139 @@
   <script>
     const story = {
       passages: [
-        { name: 'FerryTerminal', lede: 'Low metal hum from the harbour.', body: 'You arrive at the edge condition between ticketing, weather, and departure.', lat: 44.6488, lng: -63.5752, radius: 45 },
-        { name: 'ClockTower', lede: 'A vertical metronome.', body: 'The city keeps time through stone, repetition, and vantage.', lat: 44.6476, lng: -63.5728, radius: 35 },
-        { name: 'Waterline', lede: 'Exposure to wind and open distance.', body: 'At the waterline the narrative becomes weather-first.', lat: 44.6464, lng: -63.5699, radius: 30 },
-      {
-    name: "resolutes club",
-    tags: ["geo"],
-    lat: 44.635722,
-    lng: -63.572139,
-    radius: 5,
-    lede: "",
-    body: "the alleyway behind the resolutes club is dark and foggy - like some sott of dark and foggy alleyway"
-  },
-  {
-    name: "irving",
-    tags: ["geo"],
-    lat: 44.635278,
-    lng: -63.571000,
-    radius: 30,
-    lede: "",
-    body: "behind irvinf is a garbage can full of trash"
-  }
-]
+        { name: 'FerryTerminal', lede: 'Low metal hum from the harbour.', body: 'You arrive at the edge condition between ticketing, weather, and departure.', lat: 44.6488, lng: -63.5752, radius: 45, links: [] },
+        { name: 'ClockTower', lede: 'A vertical metronome.', body: 'The city keeps time through stone, repetition, and vantage.', lat: 44.6476, lng: -63.5728, radius: 35, links: [] },
+        { name: 'Waterline', lede: 'Exposure to wind and open distance.', body: 'At the waterline the narrative becomes weather-first.', lat: 44.6464, lng: -63.5699, radius: 30, links: [] },
+        {
+          name: "resolutes club",
+          tags: ["geo"],
+          lat: 44.635722,
+          lng: -63.572139,
+          radius: 5,
+          lede: "",
+          body: "the alleyway behind the resolutes club is dark and foggy - like some sott of dark and foggy alleyway",
+          links: ["Palula"]
+        },
+        {
+          name: "irving",
+          tags: ["geo"],
+          lat: 44.635278,
+          lng: -63.571000,
+          radius: 30,
+          lede: "",
+          body: "behind irvinf is a garbage can full of trash",
+          links: []
+        },
+        {
+          name: "Palula",
+          tags: ["geo"],
+          lat: 44.636128,
+          lng: -63.572082,
+          radius: 20,
+          lede: "",
+          body: "Palula.",
+          links: []
+        },
+        {
+          name: "citadel1",
+          tags: ["geo"],
+          lat: 44.647028,
+          lng: -63.578222,
+          radius: 30,
+          lede: "",
+          body: "citadel1.",
+          links: []
+        },
+        {
+          name: "radstorm",
+          tags: ["geo"],
+          lat: 44.652917,
+          lng: -63.584667,
+          radius: 30,
+          lede: "",
+          body: "radstorm.",
+          links: []
+        },
+        {
+          name: "G8_WorldTradeCentre",
+          tags: ["geo"],
+          lat: 44.642344,
+          lng: -63.572234,
+          radius: 35,
+          lede: "",
+          body: "G8_WorldTradeCentre.",
+          links: []
+        },
+        {
+          name: "G8_GrandParade",
+          tags: ["geo"],
+          lat: 44.648043,
+          lng: -63.574883,
+          radius: 25,
+          lede: "",
+          body: "G8_GrandParade.",
+          links: []
+        },
+        {
+          name: "G8_Commons",
+          tags: ["geo"],
+          lat: 44.642975,
+          lng: -63.586897,
+          radius: 60,
+          lede: "",
+          body: "G8_Commons.",
+          links: []
+        },
+        {
+          name: "G8_Harbourfront",
+          tags: ["geo"],
+          lat: 44.646,
+          lng: -63.5695,
+          radius: 40,
+          lede: "",
+          body: "G8_Harbourfront.",
+          links: []
+        },
+        {
+          name: "G8_CitadelLookout",
+          tags: ["geo"],
+          lat: 44.6478,
+          lng: -63.579,
+          radius: 40,
+          lede: "",
+          body: "G8_CitadelLookout.",
+          links: []
+        },
+        {
+          name: "G8_RoutePoint",
+          tags: ["geo"],
+          lat: 44.6439,
+          lng: -63.5736,
+          radius: 25,
+          lede: "",
+          body: "G8_RoutePoint.",
+          links: []
+        },
+        {
+          name: 'Academy',
+          lat: 44.646,
+          lng: -63.576046,
+          radius: 5,
+          lede: 'Top of the fire escape stairs',
+          body: 'Stop here. Don\'t move. The door counts seconds.\n\nThe compass is live: your next checkpoint is already marked.',
+          links: ['Academy_SideEast', 'Academy_FrontWest']
+        },
+        {
+          name: "Academy_SideEast",
+          tags: ["geo"],
+          lat: 44.64593,
+          lng: -63.576196,
+          radius: 5,
+          lede: "",
+          body: "Academy_SideEast.",
+          links: ["Academy_BackLane"]
+        }
+      ]
     };
 
     const state = { watchId: null, current: null, heading: null, active: null, mode: 'Idle', gray: true };
@@ -399,8 +510,30 @@
     function renderPassage() {
       if (!state.active) return;
       $('#passageTitle').textContent = state.active.name;
-      $('#passageLede').textContent = state.active.lede;
-      renderBodyWithLinks(state.active.body || '', $('#passageBody'));
+      $('#passageLede').textContent = state.active.lede || '';
+      const bodyEl = $('#passageBody');
+      const body = state.active.body || '';
+      const links = state.active.links || [];
+
+      if (/\[\[.+?\]\]/.test(body)) {
+        renderBodyWithLinks(body, bodyEl);
+      } else {
+        bodyEl.innerHTML = '';
+        if (body) bodyEl.appendChild(document.createTextNode(body));
+        if (links.length > 0) {
+          const sep = document.createTextNode('\n\n');
+          bodyEl.appendChild(sep);
+          links.forEach(function(target, idx) {
+            const a = document.createElement('a');
+            a.className = 'passage-link';
+            a.href = 'javascript:void(0)';
+            a.textContent = target;
+            a.addEventListener('click', (function(t) { return function() { navigateTo(t); }; })(target));
+            bodyEl.appendChild(a);
+            if (idx < links.length - 1) bodyEl.appendChild(document.createTextNode('  '));
+          });
+        }
+      }
     }
     function renderHeading() {
       $('#headingLabel').textContent = state.heading == null ? 'Heading unavailable' : Math.round(state.heading) + ' degrees';
@@ -415,8 +548,13 @@
       list.innerHTML = '';
       [].slice.call(compass.querySelectorAll('.marker')).forEach(el => el.remove());
       if (!state.current || !state.active) return;
-      story.passages
-        .filter(p => p.name !== state.active.name)
+
+      const linked = (state.active.links && state.active.links.length > 0)
+        ? story.passages.filter(p => state.active.links.indexOf(p.name) !== -1)
+        : story.passages.filter(p => p.name !== state.active.name);
+
+      linked
+        .filter(p => p.lat != null && p.lng != null)
         .map(p => {
           const distance = haversineMeters(state.current.lat, state.current.lng, p.lat, p.lng);
           const bearing = bearingDegrees(state.current.lat, state.current.lng, p.lat, p.lng);
@@ -483,7 +621,8 @@
         { lat: 44.6478, lng: -63.5735, heading: 108 },
         { lat: 44.6476, lng: -63.5728, heading: 180 },
         { lat: 44.6467, lng: -63.5708, heading: 128 },
-        { lat: 44.6464, lng: -63.5699, heading: 96 }
+        { lat: 44.6464, lng: -63.5699, heading: 96 },
+        { lat: 44.646, lng: -63.576046, heading: 200 }
       ];
       let i = 0;
       state.current = { lat: path[0].lat, lng: path[0].lng };
