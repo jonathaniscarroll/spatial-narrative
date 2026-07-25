@@ -718,30 +718,35 @@ setup.geo.getLinkedTargets = function (passageName) {
 
 // ── getEligibleCandidatePoints ─────────────────────────────────────────────
 // Returns the geo points that proximity detection should consider for the
-// next candidate passage.  When an active passage exists, only its direct
-// [[Link]] targets (that are geo-tagged points) are eligible — this keeps
-// the story graph-structured and prevents skipping ahead to unlinked nodes.
-// When no active passage is set, fall back to Start-linked points (the
-// browsing pool shown on first launch), or all geo points if Start has no
-// links.
+// next candidate passage.
+//
+// Pre-active (no v.active): only Start-linked geo points are eligible,
+// keeping the bootstrapping pool narrow.  Falls back to all geo points
+// only at this stage, before the player has entered the narrative graph.
+//
+// Post-active (v.active set): only geo points directly linked from the
+// current active passage are eligible.  Returns [] — never allPoints —
+// when the linked frontier contains no geo points, so dead-end passages
+// and passages whose links are all non-geo do not silently re-expose
+// broad region nodes (Halifax, Sydney) whose large radii may still
+// contain the player.
 setup.geo.getEligibleCandidatePoints = function () {
   var v        = State.variables.geo;
   var allPoints = setup.geo.points();
 
   if (v.active) {
+    // Graph-constrained: only the direct [[Link]] targets of the current
+    // active passage that are also geo points.  No fallback to allPoints.
     var linked = setup.geo.getLinkedTargets(v.active.name);
-    if (linked.length > 0) {
-      var linkedPoints = allPoints.filter(function (p) {
-        return linked.indexOf(p.name) !== -1;
-      });
-      // If linked targets resolve to geo points, use them; otherwise fall
-      // through to the full set so a dead-end passage doesn't trap the reader.
-      if (linkedPoints.length > 0) { return linkedPoints; }
-    }
-    return allPoints;
+    if (linked.length === 0) { return []; }
+    return allPoints.filter(function (p) {
+      return linked.indexOf(p.name) !== -1;
+    });
   }
 
   // No active passage yet — mirror the browsing pool used by refreshVisible.
+  // A broad fallback is still safe here because the player has not yet
+  // entered the narrative graph.
   var startTargets = setup.geo.getLinkedTargets('Start');
   if (startTargets.length > 0) {
     var startPoints = allPoints.filter(function (p) {
@@ -1837,36 +1842,4 @@ There is a bird noise emanating from this apartment.
 Mark when you hear it
 
 :: the wrong john carroll [geo]
-@geo 46.147648,-60.150871,20
-@dwell 12000
-Gravestone of john carroll
-
-:: Sydney [geo]
-@geo 46.135598,-60.191689,10000
-@dwell 12000
-
-[[the wrong john carroll]]
-
-:: Halifax [geo]
-@geo 44.658885,-63.576508,5000
-@dwell 12000
-
-[[ClockTower]]
-[[FerryTerminal]]
-[[Waterline]]
-[[citadel1]]
-[[Academy]]
-[[bird noise]]
-
-:: sign 1 [geo]
-@geo 46.143507,-60.189114,20
-@dwell 12000
-Test
-
-:: library [geo]
-@geo 44.643117,-63.575671,20
-@image media/4249bf6c2068da087c5ceec9c0139fda.jpg
-@dwell 12000
-Go that way for the bird noizs
-
-[[bird noise]]
+@geo 46.147648,-60.150
