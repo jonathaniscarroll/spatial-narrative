@@ -716,45 +716,47 @@ setup.geo.getLinkedTargets = function (passageName) {
   return targets;
 };
 
-// ── getEligibleCandidatePoints ─────────────────────────────────────────────
-// Returns the geo points that proximity detection should consider for the
-// next candidate passage.
+// ── getLinkedGeoPoints ─────────────────────────────────────────────────────
+// Single source of truth for "which geo points are reachable from passageName?"
+// Used by BOTH compass visibility (refreshVisible) and activation eligibility
+// (getEligibleCandidatePoints) so the two systems are guaranteed to agree.
 //
-// Pre-active (no v.active): only Start-linked geo points are eligible,
-// keeping the bootstrapping pool narrow.  Falls back to all geo points
-// only at this stage, before the player has entered the narrative graph.
-//
-// Post-active (v.active set): only geo points directly linked from the
-// current active passage are eligible.  Returns [] — never allPoints —
-// when the linked frontier contains no geo points, so dead-end passages
-// and passages whose links are all non-geo do not silently re-expose
-// broad region nodes (Halifax, Sydney) whose large radii may still
-// contain the player.
-setup.geo.getEligibleCandidatePoints = function () {
-  var v        = State.variables.geo;
+// Returns only geo points (valid lat/lng) that are direct [[Link]] targets of
+// the named passage, excluding the passage itself.  Returns [] if the passage
+// has no links or none of its links are geo points.
+setup.geo.getLinkedGeoPoints = function (passageName) {
+  var linked = setup.geo.getLinkedTargets(passageName);
+  if (linked.length === 0) { return []; }
   var allPoints = setup.geo.points();
+  return linked
+    .filter(function (name) { return name !== passageName && Story.has(name); })
+    .map(function (name)    { return setup.geo.getPointByName(name); })
+    .filter(function (p)    { return !!p; });
+};
+
+// ── getEligibleCandidatePoints ─────────────────────────────────────────────
+// Returns the geo points that proximity detection may promote to candidate.
+//
+// Pre-active: only Start-linked geo points (no fallback to all geo points
+// after the player has entered the graph).
+// Post-active: delegates entirely to getLinkedGeoPoints(active.name) so
+// activation eligibility and compass visibility share exactly the same
+// link-resolution path.  Returns [] — never allPoints — when the frontier
+// is empty, preventing dead-end or non-linked passages from re-exposing
+// broad region nodes.
+setup.geo.getEligibleCandidatePoints = function () {
+  var v = State.variables.geo;
 
   if (v.active) {
-    // Graph-constrained: only the direct [[Link]] targets of the current
-    // active passage that are also geo points.  No fallback to allPoints.
-    var linked = setup.geo.getLinkedTargets(v.active.name);
-    if (linked.length === 0) { return []; }
-    return allPoints.filter(function (p) {
-      return linked.indexOf(p.name) !== -1;
-    });
+    // Post-active: same link set the compass uses — one source of truth.
+    return setup.geo.getLinkedGeoPoints(v.active.name);
   }
 
-  // No active passage yet — mirror the browsing pool used by refreshVisible.
-  // A broad fallback is still safe here because the player has not yet
-  // entered the narrative graph.
-  var startTargets = setup.geo.getLinkedTargets('Start');
-  if (startTargets.length > 0) {
-    var startPoints = allPoints.filter(function (p) {
-      return startTargets.indexOf(p.name) !== -1;
-    });
-    if (startPoints.length > 0) { return startPoints; }
-  }
-  return allPoints;
+  // Pre-active: seed from Start links, same as refreshVisible pre-active path.
+  var startPoints = setup.geo.getLinkedGeoPoints('Start');
+  if (startPoints.length > 0) { return startPoints; }
+  // Only fallback (no Start links authored yet): expose all geo points.
+  return setup.geo.points();
 };
 
 setup.geo.chooseCandidatePassage = function () {
@@ -877,25 +879,26 @@ setup.geo.buildVisibleList = function (points, preActive) {
     .sort(function (a, b) { return a.distance - b.distance; });
 };
 
+// ── refreshVisible ─────────────────────────────────────────────────────────
+// Compass visibility now delegates to getLinkedGeoPoints() — the same helper
+// that getEligibleCandidatePoints() uses — so compass and activation are
+// driven by a single link-resolution path.
 setup.geo.refreshVisible = function () {
   var v = State.variables.geo;
   if (!v.current) { v.visible = []; return; }
 
   if (!v.active) {
-    var startTargets = setup.geo.getLinkedTargets('Start');
-    var allPoints    = setup.geo.points();
-    var browsePoints = startTargets.length > 0
-      ? allPoints.filter(function (p) { return startTargets.indexOf(p.name) !== -1; })
-      : allPoints;
+    // Pre-active: show Start-linked geo points; fallback to all if none authored.
+    var browsePoints = setup.geo.getLinkedGeoPoints('Start');
+    if (browsePoints.length === 0) { browsePoints = setup.geo.points(); }
     v.visible = setup.geo.buildVisibleList(browsePoints, true);
     return;
   }
 
-  var linked = setup.geo.getLinkedTargets(v.active.name);
-  var linkedPoints = linked
-    .filter(function (name) { return name !== v.active.name && Story.has(name); })
-    .map(function (name)    { return setup.geo.getPointByName(name); })
-    .filter(function (p)    { return !!p; });
+  // Post-active: getLinkedGeoPoints() is the shared frontier — same as
+  // getEligibleCandidatePoints() uses.  Exclude the active passage itself.
+  var linkedPoints = setup.geo.getLinkedGeoPoints(v.active.name)
+    .filter(function (p) { return p.name !== v.active.name; });
 
   var freshList = setup.geo.buildVisibleList(linkedPoints, false);
 
