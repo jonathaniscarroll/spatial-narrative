@@ -716,10 +716,47 @@ setup.geo.getLinkedTargets = function (passageName) {
   return targets;
 };
 
+// ── getEligibleCandidatePoints ─────────────────────────────────────────────
+// Returns the geo points that proximity detection should consider for the
+// next candidate passage.  When an active passage exists, only its direct
+// [[Link]] targets (that are geo-tagged points) are eligible — this keeps
+// the story graph-structured and prevents skipping ahead to unlinked nodes.
+// When no active passage is set, fall back to Start-linked points (the
+// browsing pool shown on first launch), or all geo points if Start has no
+// links.
+setup.geo.getEligibleCandidatePoints = function () {
+  var v        = State.variables.geo;
+  var allPoints = setup.geo.points();
+
+  if (v.active) {
+    var linked = setup.geo.getLinkedTargets(v.active.name);
+    if (linked.length > 0) {
+      var linkedPoints = allPoints.filter(function (p) {
+        return linked.indexOf(p.name) !== -1;
+      });
+      // If linked targets resolve to geo points, use them; otherwise fall
+      // through to the full set so a dead-end passage doesn't trap the reader.
+      if (linkedPoints.length > 0) { return linkedPoints; }
+    }
+    return allPoints;
+  }
+
+  // No active passage yet — mirror the browsing pool used by refreshVisible.
+  var startTargets = setup.geo.getLinkedTargets('Start');
+  if (startTargets.length > 0) {
+    var startPoints = allPoints.filter(function (p) {
+      return startTargets.indexOf(p.name) !== -1;
+    });
+    if (startPoints.length > 0) { return startPoints; }
+  }
+  return allPoints;
+};
+
 setup.geo.chooseCandidatePassage = function () {
   var v = State.variables.geo;
   if (!v.current) { return null; }
-  var ranked = setup.geo.points()
+  var eligible = setup.geo.getEligibleCandidatePoints();
+  var ranked = eligible
     .map(function (p) {
       return Object.assign({}, p, {
         distance: setup.geo.distance(v.current.lat, v.current.lng, p.lat, p.lng)
