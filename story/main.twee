@@ -1462,6 +1462,37 @@ The body text is controlled by the nearest resolved geo passage. Links below con
 [[Halifax]]
 [[Sydney]]
 
+:: Halifax [geo]
+@geo 44.6488,-63.5752,50000
+@lede Halifax, Nova Scotia — enter the city radius to unlock nearby passages.
+@dwell 5000
+You are within range of Halifax. The story passages in this city are now active.
+
+[[FerryTerminal]]
+[[ClockTower]]
+[[Waterline]]
+[[Resolutes Club]]
+[[Irving]]
+[[citadel1]]
+[[radstorm]]
+[[G8_WorldTradeCentre]]
+[[G8_GrandParade]]
+[[G8_Commons]]
+[[G8_Harbourfront]]
+[[G8_CitadelLookout]]
+[[G8_RoutePoint]]
+[[Palula]]
+[[Academy]]
+[[bird noise]]
+
+:: Sydney [geo]
+@geo 46.1368,-60.1942,50000
+@lede Sydney, Cape Breton — enter the city radius to unlock nearby passages.
+@dwell 5000
+You are within range of Sydney. The story passages in this city are now active.
+
+[[the wrong john carroll]]
+
 :: FerryTerminal [geo harbour]
 @geo 44.6488,-63.5752,45
 @lede Low metal hum from the harbour.
@@ -1845,4 +1876,8 @@ There is a bird noise emanating from this apartment.
 Mark when you hear it
 
 :: the wrong john carroll [geo]
-@geo 46.147648,-60.150
+@geo 46.147648,-60.150696,30
+@lede A case of mistaken identity on the island.
+@dwell 12000
+This is not the john carroll you are looking for.
+Or perhaps it is.
