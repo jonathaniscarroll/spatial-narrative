@@ -91,7 +91,7 @@ Directional and stage-two passages do **not** need a `@geo` directive — they i
 
 ## The Start Passage
 
-`Start` is a non-geo passage that acts as the story's map index. Every top-level geo node should be linked here with `[[PassageName]]`. These links drive the **pre-active** compass — before any passage is dwelled into, the compass shows all Start-linked nodes using real GPS bearings so the author can verify the full node set before field testing.
+`Start` is a non-geo passage that acts as the story's map index. Every top-level geo node should be linked here with `[[PassageName]]`. These links drive both the **pre-active compass** and the **initial activation pool** — before any passage is dwelled into, only `Start`-linked geo nodes are eligible candidates, and the compass shows them with real GPS bearings.
 
 The authoring tool also uses the `Start` passage as the **seed for the Passages list** — on load, only `Start` and its directly linked passages appear in the list. See [Authoring Tool](#authoring-tool-authorindexhtml) for details.
 
@@ -102,6 +102,26 @@ The authoring tool also uses the `Start` passage as the **seed for the Passages 
 [[ClockTower]]
 [[Waterline]]
 ```
+
+---
+
+## Graph-Constrained Activation
+
+Activation eligibility is link-graph-constrained at all times. The engine never scans all geo passages to find a candidate — it only considers the set of passages reachable from the current narrative position.
+
+### How the constraint works
+
+| State | Eligible activation candidates |
+|---|---|
+| **Pre-active** (no `v.active` yet) | Only geo passages linked from `Start` |
+| **Active** (`v.active` is set) | Only geo passages linked via `[[...]]` from the current active passage |
+| **No linked geo targets** | Empty set — no candidate is chosen; no fallback to all geo passages |
+
+This prevents large-radius "region selector" nodes from re-hijacking activation once a player has entered a downstream passage. A node like `Halifax` (large radius, linked from `Start`) can bootstrap the initial area, but once a local node activates, `Halifax` is excluded from the candidate pool unless the local node explicitly links back to it.
+
+### Single source of truth
+
+Both activation eligibility (`getEligibleCandidatePoints`) and compass visibility (`refreshVisible`) resolve reachable nodes from the same source: `getLinkedTargets(v.active.name)` post-active, and `getLinkedTargets('Start')` pre-active. The only intentional asymmetry is the stale compass fallback (`v.lastLinked`) — stale nodes remain *visible* in grey between passages but are **never** returned as activation candidates.
 
 ---
 
@@ -120,6 +140,7 @@ The authoring tool also uses the `Start` passage as the **seed for the Passages 
 ### Stale fallback
 - Stale markers render grey (`.marker.stale`) with a note in the target list
 - Bearings are recalculated from current position each tick so dots track movement even in stale state
+- Stale nodes are **not** eligible for activation — only compass display
 
 ---
 
@@ -136,7 +157,7 @@ All runtime state lives in a single SugarCube variable initialised in `StoryInit
 | `candidate` | point object / null | Nearest passage inside its radius, not yet dwelled |
 | `candidateSince` | timestamp / null | When the current candidate was first entered |
 | `visible` | array | Geo nodes currently shown on compass |
-| `lastLinked` | array | Last non-empty linked set; used as stale fallback between passages |
+| `lastLinked` | array | Last non-empty linked set; used as stale compass fallback between passages (not used for activation) |
 | `unlocked` | array | Names of all passages ever activated (persistent within session) |
 | `displayed` | string / null | Name of the passage currently shown in the UI |
 | `displayedBase` | string / null | Base name (before directional override) |
@@ -157,15 +178,17 @@ All engine logic lives in `setup.geo.*` inside `Story JavaScript`.
 |---|---|
 | `parse(text)` | Extracts `@` directives and body from raw passage text |
 | `points()` | Returns all `[geo]`-tagged passages with valid coordinates |
+| `getLinkedTargets(passageName)` | Parses `[[Link]]` syntax from a passage's raw text and returns an array of target passage names. Used by both activation and compass as the single link-resolution path. |
+| `getEligibleCandidatePoints()` | Returns the geo points eligible for activation: pre-active → Start-linked points only; post-active → points linked from `v.active`; no linked targets → empty array. **No fallback to all geo passages after first activation.** |
 | `distance(aLat,aLng,bLat,bLng)` | Haversine distance in metres |
 | `bearing(aLat,aLng,bLat,bLng)` | True bearing in degrees |
 | `buildVisibleList(points, preActive)` | Shared helper: compute bearing/relative for a point list; skips facing filter when `preActive=true` |
-| `chooseCandidatePassage()` | Nearest point inside its radius, or null |
+| `chooseCandidatePassage()` | Returns the nearest point inside its radius from `getEligibleCandidatePoints()`, or null. Activation pool is always link-constrained — never all geo passages. |
 | `updateActiveByDwell()` | Promotes candidate to active once dwell threshold met |
 | `getDwellProgress()` | Returns `{name, elapsed, required, pct}` for UI feedback |
 | `chooseDirectionalPassage(base)` | Picks a `@dir` variant matching current heading |
 | `updateDisplayedPassage()` | Resolves active → `@then` → `@dir` chain |
-| `refreshVisible()` | Populates `$geo.visible`; pre-active uses Start links with no facing filter; active uses passage links with `lastLinked` fallback |
+| `refreshVisible()` | Populates `$geo.visible`; pre-active uses Start links with no facing filter; active uses passage links with `lastLinked` stale fallback (compass only) |
 | `getShownPassage()` | Returns the parsed passage object currently on screen |
 | `renderPassage()` | Writes title, lede, body, image, audio to DOM |
 | `renderCompass()` | Draws heading arrow and bearing markers from `v.visible`; grey stale markers when `v.visible[0].stale` |
@@ -186,6 +209,7 @@ All engine logic lives in `setup.geo.*` inside `Story JavaScript`.
 - Compass shows all Start-linked nodes with real bearings — markers move with heading and GPS
 - Facing threshold not applied
 - Passage display shows "Waiting for a place"
+- Only Start-linked geo nodes are eligible activation candidates
 
 ### Dwell mode (inside radius, not yet resolved)
 - Passage title shows "Approaching [Name]"
@@ -196,6 +220,7 @@ All engine logic lives in `setup.geo.*` inside `Story JavaScript`.
 - Compass shows linked nodes filtered by heading threshold
 - `@after`/`@then` and `@dir` variants update silently as time and heading change
 - Between passages: last linked set shown in grey (stale) until next passage activates
+- Only passages explicitly linked from the active passage are eligible as the next candidate
 
 ---
 
@@ -217,6 +242,8 @@ A standalone HTML file — no build step, no server.
 
 > **Important:** The **Linked Passages** field is separate from Body Text. Links added here serialise as `[[Name]]` lines in the `.twee` output and are what the compass reads at runtime. Do not manually type `[[links]]` in the body textarea — use the Add Link buttons.
 
+> **Activation note:** Because activation is link-graph-constrained, any geo passage you want reachable from a given node **must** be linked from it in the Linked Passages field. Unlinked geo passages inside a player's radius will not activate.
+
 ### Two ways to create a passage
 
 | Method | Use when |
@@ -237,7 +264,7 @@ The Passages tab shows a **context-aware subset** of passages rather than the fu
 - **On select:** when you click a passage, all of *its* linked passages are added to the visible set permanently (the set only ever grows within a session)
 - **Show All / Linked Only toggle:** a button in the tab header switches between the filtered view and the complete passage list; the label updates to reflect the current mode
 
-This mirrors the compass's own reachability logic and keeps the list focused on the part of the graph you are actively authoring. Use **Show All** to jump to any passage outside the current linked set.
+This mirrors the engine's own reachability logic and keeps the list focused on the part of the graph you are actively authoring. Use **Show All** to jump to any passage outside the current linked set.
 
 ### Image Upload
 
@@ -294,7 +321,7 @@ Images can be uploaded directly from the authoring tool's Editor tab without lea
 - **No framework dependencies in the reader** — pure SugarCube + vanilla JS. Leaflet is used only in the authoring tool.
 - **Passage body is prose, not SugarCube markup** — `@dir` and `@then` handle branching at the engine level.
 - **Active passage persists when leaving a radius** — the last resolved passage stays visible until a new one activates.
-- **Links drive the compass** — `[[PassageName]]` in a passage's body/links section is what `getLinkedTargets()` parses to build the compass target list.
+- **Links drive both the compass and activation** — `[[PassageName]]` in a passage's body/links section is what `getLinkedTargets()` parses, and this is the single source of truth for what is reachable next.
 
 ---
 
@@ -323,6 +350,10 @@ Images can be uploaded directly from the authoring tool's Editor tab without lea
 ## Changelog
 
 ### July 2026
+- **Graph-constrained activation (Phases 2–5):** `getEligibleCandidatePoints()` introduced as the single gating function for activation candidates. Pre-active: only `Start`-linked geo points eligible. Post-active: only geo points linked from the current active passage. No fallback to all geo passages after first activation. Large-radius region nodes (e.g. `Halifax`, `Sydney`) cannot re-hijack activation once a downstream passage is active.
+- **`getLinkedTargets(passageName)`** documented as the shared link-resolution path used by both `getEligibleCandidatePoints` (activation) and `refreshVisible` (compass). Single source of truth for reachability.
+- **`chooseCandidatePassage()`** updated to call `getEligibleCandidatePoints()` exclusively — no longer iterates all geo passages.
+- **Stale fallback clarified:** `v.lastLinked` is compass-display only; stale nodes are visible in grey but never returned as activation candidates.
 - **Authoring tool:** **Image upload** — Editor tab now includes an Image section for every passage: choose a local file, click Upload to push it to `media/` via the GitHub Contents API, preview the thumbnail inline, and detach with Remove. The `@image media/<filename>` directive is written to the passage and serialised in `.twee` automatically.
 - **Authoring tool:** **Passages tab linked-only filter** — list seeds from the `Start` passage on load; selecting a node permanently expands the visible set with that node's links; **Show All / Linked Only** toggle in the tab header to switch between filtered and full list
 - **Authoring tool:** **New Passage button** in toolbar — creates any passage without requiring a map click; supports non-geo passages (directional variants, stage-two passages, etc.) with an optional tags field; opens a Win95-style modal dialog; Esc/Enter keyboard shortcuts and backdrop-click to dismiss
