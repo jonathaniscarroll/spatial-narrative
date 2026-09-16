@@ -1466,6 +1466,7 @@ The body text is controlled by the nearest resolved geo passage. Links below con
 @geo 44.6488,-63.5752,50000
 @lede Halifax, Nova Scotia — enter the city radius to unlock nearby passages.
 @dwell 5000
+@dir 0-45:
 You are within range of Halifax. The story passages in this city are now active.
 
 [[FerryTerminal]]
@@ -1890,6 +1891,8 @@ Or perhaps it is.
 @image media/IMG_6492.jpeg
 @dwell 1200
 there are cars in the neighborhood I guess. some barricades are there. bumpy road again. Sitting on the seaside facing Goldenrod, Soledago, knotweed, etc., the ecological bounty of the perimeter and the economic bounty of the interstice between land and sea, creating a field recording itself same site the engines of cars passing trucks more so empty of cargo leaving or coming full of cargo leaving or coming. The containers pile up against fences that serve as other demarcators of transitional space holding potential for occupation by life seeking a niche ecologically containers seeking same but economic. Helen Creighton captured the fleeting oral expression of culture in the moment before its total capture and homogenization by broadcast media broadcast mass media itself afforded by the same technology used by folklorists to record their human subjects an archive of voices and songs altered through observation and recording in that the oral becomes fixed. I am sitting in the post-industrial ruins of an order propped up by the recorded folklore the lore of a folk as commodity for tourism tourists arriving like cargo containers of commodities value to be extracted. So,
+
+[[Halifax]]
 
 :: samuel cunard [geo]
 @geo 44.641117,-63.566462,20
