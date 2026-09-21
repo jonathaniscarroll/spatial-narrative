@@ -618,6 +618,11 @@ setup.geo.parse = function (passageText) {
     else if (t.indexOf('@then ')   === 0) { meta.then   = t.slice(6).trim(); }
     else if (t.indexOf('@image ')  === 0) { meta.image  = t.slice(7).trim(); }
     else if (t.indexOf('@audio ')  === 0) { meta.audio  = t.slice(7).trim(); }
+    // ── @img legacy alias: bare filename → prefix media/ ──────────────
+    else if (t.indexOf('@img ')    === 0) {
+      var imgVal = t.slice(5).trim();
+      meta.image = (imgVal.indexOf('/') === -1) ? 'media/' + imgVal : imgVal;
+    }
     else if (t.indexOf('@dir ')    === 0) {
       var spec  = t.slice(5).trim();
       var pair  = spec.split(':');
@@ -1175,6 +1180,15 @@ setup.geo.renderBodyWithLinks = function (text, containerEl) {
   }
 };
 
+// ── media path helper ─────────────────────────────────────────────────────
+// If the stored value already contains a '/' it is a repo-root-relative path
+// (e.g. "media/foo.jpg") — use it as-is.  A bare filename (no '/') gets the
+// legacy "media/" prefix so old @img entries still resolve correctly.
+setup.geo._mediaPath = function (val) {
+  if (!val) { return ''; }
+  return (val.indexOf('/') === -1) ? 'media/' + val : val;
+};
+
 // ── Render passage (including image and audio) ────────────────────────────
 setup.geo.renderPassage = function () {
   var titleEl    = document.getElementById('passageTitle');
@@ -1209,7 +1223,9 @@ setup.geo.renderPassage = function () {
   var setMedia = function (passage) {
     if (imageWrap && imageEl) {
       if (passage && passage.image) {
-        imageEl.src = 'media/' + passage.image;
+        // Use passage.image as-is if it already contains a path separator;
+        // otherwise fall back to prepending 'media/' for bare filenames.
+        imageEl.src = setup.geo._mediaPath(passage.image);
         imageEl.alt = passage.name;
         imageWrap.style.display = '';
       } else {
@@ -1218,7 +1234,7 @@ setup.geo.renderPassage = function () {
       }
     }
     if (audioWrap && audioEl) {
-      var newSrc = passage && passage.audio ? 'media/' + passage.audio : '';
+      var newSrc = passage && passage.audio ? setup.geo._mediaPath(passage.audio) : '';
       if (audioEl.getAttribute('src') !== newSrc) {
         audioEl.pause();
         if (newSrc) {
@@ -1915,14 +1931,14 @@ are taking in - or something -
 
 someone talking of the playground 
 
-“Can I have a sip of your Gatorade, sir”
+"Can I have a sip of your Gatorade, sir"
 
 Biking bye
 and trumpets on the crest of the seashore tonight
 
-“how’s your story going” you ask
+"how's your story going" you ask
 
-“you’ll see”
+"you'll see"
 
 Burbing and belching into the void
 
@@ -1937,7 +1953,7 @@ black water
 a voice singing through speaker
 ripple ripple ripple goes black water in return
 hot keys and happy couples through chilly nighttime 
-“I’d rather be lonely than happy with someone else”
+"I'd rather be lonely than happy with someone else"
 while the dancers and the lovers explode forth
 with the horns
 chatter chatter chatter
