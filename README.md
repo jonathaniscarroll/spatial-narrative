@@ -75,8 +75,14 @@ Body text goes here. Plain prose.
 | `@facing deg` | Override the global heading threshold (35°) for this passage's directional visibility. | 35° |
 | `@after ms` | Milliseconds after activation before switching to the `@then` passage. | None |
 | `@then Name` | Second-stage passage displayed once `@after` elapses. | None |
-| `@audio file` | Audio filename relative to `media/`. Shown as `<audio controls>`. | None |
+| `@audio file` | Audio filename relative to `media/` (bare filename, e.g. `ambient.mp3`). Shown as `<audio controls>` below body text. Managed via Upload or Record in authoring tool. | None |
 | `@dir S-E:Name` | If heading is in the arc S°→E°, display `Name` instead of the base passage. | None (multiple allowed) |
+
+> **`@image` path contract:** the value stored in `.twee` is a **repo-root-relative path** such as `media/photo.jpg`. The reader's `renderPassage` uses the path as-is — it does not prepend `media/` a second time. The authoring tool writes `@image media/<filename>` on upload, which is the correct form.
+>
+> **`@audio` path contract:** the value stored in `.twee` is a **bare filename** (e.g. `ambient.mp3`). The reader prepends `media/` at render time (`'media/' + passage.audio`). The authoring tool stores and serialises only the filename portion.
+>
+> **Legacy `@img` alias:** passages written with `@img Filename.jpeg` (no `media/` prefix) are automatically mapped to `meta.image` by `setup.geo.parse` for backwards compatibility. The reader treats the value as a bare filename and prefixes `media/` at render time.
 
 ### Passage naming conventions
 
@@ -176,7 +182,7 @@ All engine logic lives in `setup.geo.*` inside `Story JavaScript`.
 
 | Function | Purpose |
 |---|---|
-| `parse(text)` | Extracts `@` directives and body from raw passage text |
+| `parse(text)` | Extracts `@` directives and body from raw passage text. Parses `@image`, `@audio`, legacy `@img` (mapped to `meta.image`), and all other directives. |
 | `points()` | Returns all `[geo]`-tagged passages with valid coordinates |
 | `getLinkedTargets(passageName)` | Parses `[[Link]]` syntax from a passage's raw text and returns an array of target passage names. Used by both activation and compass as the single link-resolution path. |
 | `getEligibleCandidatePoints()` | Returns the geo points eligible for activation: pre-active → Start-linked points only; post-active → points linked from `v.active`; no linked targets → empty array. **No fallback to all geo passages after first activation.** |
@@ -190,7 +196,7 @@ All engine logic lives in `setup.geo.*` inside `Story JavaScript`.
 | `updateDisplayedPassage()` | Resolves active → `@then` → `@dir` chain |
 | `refreshVisible()` | Populates `$geo.visible`; pre-active uses Start links with no facing filter; active uses passage links with `lastLinked` stale fallback (compass only) |
 | `getShownPassage()` | Returns the parsed passage object currently on screen |
-| `renderPassage()` | Writes title, lede, body, image, audio to DOM |
+| `renderPassage()` | Writes title, lede, body, image, and audio to DOM. `@image` path is used as-is (repo-root-relative); `@audio` filename is prefixed with `media/`. |
 | `renderCompass()` | Draws heading arrow and bearing markers from `v.visible`; grey stale markers when `v.visible[0].stale` |
 | `refresh()` | Master update: calls all of the above in order |
 | `startGeolocation()` | Starts `watchPosition` |
@@ -217,6 +223,8 @@ All engine logic lives in `setup.geo.*` inside `Story JavaScript`.
 
 ### Active mode (dwell met)
 - Passage title, lede, and body render from the displayed passage
+- Image (if `@image` set) renders below body text
+- Audio player (if `@audio` set) renders below body text as `<audio controls>`
 - Compass shows linked nodes filtered by heading threshold
 - `@after`/`@then` and `@dir` variants update silently as time and heading change
 - Between passages: last linked set shown in grey (stale) until next passage activates
@@ -238,7 +246,8 @@ A standalone HTML file — no build step, no server.
 7. Edit fields in the Editor tab
 8. **Linked Passages field** — tap passage buttons under "Add Link" to add `[[links]]`; tap ✕ on a chip to remove one. Changes write immediately to the passage data.
 9. **Image field** — choose a file and click **Upload** to push it to `media/` and attach it to the passage as `@image`. See [Image Upload](#image-upload) below.
-10. Click **Apply Changes** to commit prose/field edits, then add a commit message and click **Save**
+10. **Audio field** — upload an existing audio file or record directly from the microphone. See [Audio Upload and Recording](#audio-upload-and-recording) below.
+11. Click **Apply Changes** to commit prose/field edits, then add a commit message and click **Save**
 
 > **Important:** The **Linked Passages** field is separate from Body Text. Links added here serialise as `[[Name]]` lines in the `.twee` output and are what the compass reads at runtime. Do not manually type `[[links]]` in the body textarea — use the Add Link buttons.
 
@@ -253,7 +262,7 @@ A standalone HTML file — no build step, no server.
 
 ### Tabs
 - **Passages** — filtered list of reachable passages (see below); click to select
-- **Editor** — form-based editor for all `@` fields, directional rules, body text, linked passages, and image upload
+- **Editor** — form-based editor for all `@` fields, directional rules, body text, linked passages, image upload, and audio upload/recording
 - **Raw** — live preview of the generated `.twee` block for the selected passage
 
 ### Passages Tab — Linked-Only Filter
@@ -277,13 +286,40 @@ Every passage has an **Image** section in the Editor tab:
 5. Click **Apply Changes** then **Save** to commit the updated `.twee` (the image file itself is committed to `media/` at upload time, independently of the story save)
 6. Click **Remove** to detach the image from the passage (does not delete the file from `media/`)
 
-Images are stored at `media/<filename>` and referenced in `.twee` as:
+Images are stored at `media/<filename>` and referenced in `.twee` as a repo-root-relative path:
 
 ```twee
 @image media/filename.jpg
 ```
 
-The reader renders the image below the passage body text.
+The reader renders the image as-is — it does **not** prepend `media/` again. Always include the `media/` prefix in the stored value.
+
+### Audio Upload and Recording
+
+Every passage has an **Audio** section in the Editor tab, immediately below the Image section:
+
+**Uploading an existing file:**
+1. Choose a local audio file using the file picker (any format: `.mp3`, `.m4a`, `.wav`, `.ogg`, `.webm`, etc.)
+2. Click **Upload** — the tool base64-encodes the file and PUTs it to `media/<filename>` in the repo (same flow as image upload). If a file with the same name already exists, it is replaced.
+3. An `<audio controls>` preview appears immediately in the Editor
+4. The passage's `@audio` field is set to the **bare filename** (e.g. `ambient.mp3`) and the Raw tab updates instantly
+5. Click **Apply Changes** then **Save** to commit the updated `.twee`
+6. Click **Remove** to detach the audio from the passage (does not delete the file from `media/`)
+
+**Recording from the microphone:**
+1. Click **⏺ Record** — the browser requests microphone permission via `getUserMedia`
+2. Recording begins immediately; the button changes to **⏹ Stop** and a "Recording…" status appears
+3. Click **⏹ Stop** — the recording is assembled into a `.webm` blob, named `recording_<passageName>_<timestamp>.webm`, and uploaded to `media/` automatically
+4. After upload completes, the `<audio controls>` preview appears and the `@audio` directive is written to the passage
+5. If `MediaRecorder` or `getUserMedia` is not available in the browser, a hint appears: *"Browser does not support audio recording; use file upload instead."*
+
+Audio files are stored at `media/<filename>` and referenced in `.twee` as a **bare filename**:
+
+```twee
+@audio filename.mp3
+```
+
+The reader prepends `media/` at render time. Do **not** include `media/` in the stored value — the authoring tool handles this automatically.
 
 ### iOS / home screen
 The authoring tool includes PWA meta tags and a mobile-optimised layout. Add to iOS home screen for full-screen use.
@@ -304,14 +340,14 @@ The reader is a compiled SugarCube `.html` file. To update it after editing `sto
 
 ## Media Files
 
-Place images and audio in the `media/` directory. Reference by path from repo root:
+Place images and audio in the `media/` directory. Reference according to each directive's contract:
 
 ```twee
-@image media/harbour-terminal.jpg
-@audio media/ferry-ambient.mp3
+@image media/harbour-terminal.jpg   ← full repo-root path
+@audio ferry-ambient.mp3            ← bare filename only
 ```
 
-Images can be uploaded directly from the authoring tool's Editor tab without leaving the browser. Audio files must be added to `media/` manually or via the GitHub web interface.
+Both images and audio can be uploaded directly from the authoring tool's Editor tab without leaving the browser. Audio can additionally be recorded live from the device microphone in the Editor tab.
 
 ---
 
@@ -348,6 +384,13 @@ Images can be uploaded directly from the authoring tool's Editor tab without lea
 ---
 
 ## Changelog
+
+### September 2026
+- **`@image` path fix in reader:** `setup.geo.renderPassage` now uses the `@image` value as-is (a repo-root-relative path such as `media/photo.jpg`) rather than prepending `media/` a second time. This fixes images not displaying in the geo nav viewer for passages uploaded via the authoring tool. The `.twee` contract is unchanged: `@image media/<filename>`.
+- **Legacy `@img` alias:** `setup.geo.parse` now maps `@img <filename>` (bare filename, no `media/` prefix) to `meta.image`. The reader treats it as a bare filename and prefixes `media/` at render time, so existing passages using `@img` continue to display correctly.
+- **Audio upload in authoring tool:** the Editor tab now includes an **Audio** section for every passage. Choose a local audio file and click **Upload** to push it to `media/` via the GitHub Contents API (same flow as image upload). The `@audio <filename>` directive is written to the passage and serialised in `.twee` automatically. A live `<audio controls>` preview appears in the Editor after upload. Click **Remove** to detach (does not delete the file).
+- **In-browser audio recording in authoring tool:** the Audio section also includes a **⏺ Record** button. Clicking it requests microphone permission via `getUserMedia`, records via `MediaRecorder` (preferring `audio/webm`), and on stop assembles the chunks into a `.webm` file named `recording_<passageName>_<timestamp>.webm`. The file is uploaded to `media/` and attached to the passage automatically. If the browser lacks `MediaRecorder` / `getUserMedia` support, a fallback hint is shown instead of the Record button.
+- **`uploadMediaFileToGitHub` helper:** the image upload function in the authoring tool was refactored into a shared generic helper used by both image and audio uploads. `uploadImageToGitHub(file)` is preserved as a backwards-compatible wrapper.
 
 ### July 2026
 - **Graph-constrained activation (Phases 2–5):** `getEligibleCandidatePoints()` introduced as the single gating function for activation candidates. Pre-active: only `Start`-linked geo points eligible. Post-active: only geo points linked from the current active passage. No fallback to all geo passages after first activation. Large-radius region nodes (e.g. `Halifax`, `Sydney`) cannot re-hijack activation once a downstream passage is active.
