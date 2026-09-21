@@ -133,6 +133,13 @@
   .image-upload-controls { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
   .image-filename { font-size: 11px; color: #555; font-style: italic; }
   #imageUploadProgress { font-size: 11px; color: #000080; display: none; }
+  /* ── Audio row ── */
+  .audio-row { display: flex; flex-direction: column; gap: 4px; }
+  .audio-upload-controls { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+  .audio-filename { font-size: 11px; color: #555; font-style: italic; }
+  #audioUploadProgress { font-size: 11px; color: #000080; }
+  .audio-preview { width: 100%; margin-top: 4px; }
+  #recordBtn.recording { background: #800000; color: #fff; box-shadow: var(--inset); }
 </style>
 </head>
 <body>
@@ -231,6 +238,11 @@ let linkedNodeSet = new Set();
 let showAllPassages = false;
 let activePopup = null;
 
+// ── MediaRecorder state ───────────────────────────────────────────────────
+let _mediaRecorder = null;
+let _recordChunks = [];
+let _recordStream = null;
+
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js').catch(() => {});
 }
@@ -286,7 +298,7 @@ map.on('click', function(e) {
     const name = nameInput ? nameInput.value.trim() : '';
     if (!name) { nameInput.style.outline = '2px solid red'; return; }
     passages.push({ name, tags: ['geo'], lat: parseFloat(lat), lng: parseFloat(lng),
-      radius: 20, lede: '', dwell: 12000, after: null, then: null, facing: null, dirs: [], links: [], body: '', image: null });
+      radius: 20, lede: '', dwell: 12000, after: null, then: null, facing: null, dirs: [], links: [], body: '', image: null, audio: null });
     map.closePopup(activePopup); activePopup = null;
     const i = passages.length - 1;
     buildMarkers(); renderPassageList('');
@@ -349,7 +361,7 @@ function createPassageObject(name, tags) {
     lede: '',
     dwell: isGeo ? 12000 : null,
     after: null, then: null, facing: null,
-    dirs: [], links: [], body: '', image: null
+    dirs: [], links: [], body: '', image: null, audio: null
   };
 }
 
@@ -458,7 +470,7 @@ function parseTwee(text) {
     const name = tagMatch ? tagMatch[1].trim() : header;
     const tags = tagMatch ? tagMatch[2].split(/\s+/).filter(Boolean) : [];
 
-    let lat = null, lng = null, radius = 30, lede = '', dwell = null, after = null, then_ = null, facing = null, image = null;
+    let lat = null, lng = null, radius = 30, lede = '', dwell = null, after = null, then_ = null, facing = null, image = null, audio = null;
     const dirs = [];
     const lines = body_raw.split('\n');
     const bodyLines = [];
@@ -471,6 +483,7 @@ function parseTwee(text) {
         lat = parseFloat(parts[0]); lng = parseFloat(parts[1]);
         if (parts[2]) radius = parseFloat(parts[2]);
       } else if (t.startsWith('@image ')) { image = t.slice(7).trim();
+      } else if (t.startsWith('@audio ')) { audio = t.slice(7).trim();
       } else if (t.startsWith('@lede ')) { lede = t.slice(6).trim();
       } else if (t.startsWith('@dwell ')) { dwell = parseInt(t.slice(7).trim(), 10);
       } else if (t.startsWith('@after ')) { after = parseInt(t.slice(7).trim(), 10);
@@ -495,7 +508,7 @@ function parseTwee(text) {
     const isSpecial = specialNames.includes(name) || tags.includes('script') || tags.includes('stylesheet');
 
     const body = bodyLines.join('\n').trim();
-    return { name, tags, lat, lng, radius, lede, dwell, after, then: then_, facing, dirs, links, body, image, _raw: block, isSpecial };
+    return { name, tags, lat, lng, radius, lede, dwell, after, then: then_, facing, dirs, links, body, image, audio, _raw: block, isSpecial };
   });
 }
 
@@ -513,6 +526,7 @@ function serializePassage(p) {
   if (p.after != null) out += '@after ' + p.after + '\n';
   if (p.then) out += '@then ' + p.then + '\n';
   if (p.facing != null) out += '@facing ' + p.facing + '\n';
+  if (p.audio) out += '@audio ' + p.audio + '\n';
   p.dirs.forEach(d => { out += '@dir ' + d.start + '-' + d.end + ':' + d.target + '\n'; });
   if (p.body) out += p.body + '\n';
   if (p.links && p.links.length > 0) {
@@ -596,12 +610,13 @@ function selectPassage(i) {
   if (isFinite(p.lat) && isFinite(p.lng)) map.panTo([p.lat, p.lng]);
 }
 
-// ── Image upload to GitHub ────────────────────────────────────────────────
-async function uploadImageToGitHub(file) {
+// ── Generic media upload to GitHub ───────────────────────────────────────
+// Returns the repo-root path (e.g. "media/foo.mp3") on success, or null.
+async function uploadMediaFileToGitHub(file, progressElId, labelOverride) {
   const token = getToken();
-  if (!token) { showNotice('Enter a GitHub token before uploading images.', 'error'); return null; }
+  if (!token) { showNotice('Enter a GitHub token before uploading.', 'error'); return null; }
 
-  const progress = document.getElementById('imageUploadProgress');
+  const progress = progressElId ? document.getElementById(progressElId) : null;
   if (progress) { progress.style.display = 'block'; progress.textContent = 'Uploading…'; }
 
   return new Promise((resolve, reject) => {
@@ -611,25 +626,18 @@ async function uploadImageToGitHub(file) {
         const base64 = ev.target.result.split(',')[1];
         const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
         const mediaPath = 'media/' + safeName;
+        const commitMsg = (labelOverride || 'Add media') + ' ' + safeName + ' via authoring tool';
 
-        // Check if file already exists (to get its SHA for update)
         let existingSha = null;
         try {
           const check = await fetch(
             `https://api.github.com/repos/${OWNER}/${REPO}/contents/${mediaPath}?ref=${BRANCH}`,
             { headers: { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github.v3+json' } }
           );
-          if (check.ok) {
-            const existing = await check.json();
-            existingSha = existing.sha;
-          }
+          if (check.ok) { const existing = await check.json(); existingSha = existing.sha; }
         } catch (_) {}
 
-        const body = {
-          message: 'Add image ' + safeName + ' via authoring tool',
-          content: base64,
-          branch: BRANCH
-        };
+        const body = { message: commitMsg, content: base64, branch: BRANCH };
         if (existingSha) body.sha = existingSha;
 
         const res = await fetch(
@@ -644,10 +652,7 @@ async function uploadImageToGitHub(file) {
             body: JSON.stringify(body)
           }
         );
-        if (!res.ok) {
-          const err = await res.json();
-          throw new Error(err.message || 'HTTP ' + res.status);
-        }
+        if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'HTTP ' + res.status); }
         if (progress) { progress.style.display = 'none'; }
         resolve(mediaPath);
       } catch (e) {
@@ -657,6 +662,11 @@ async function uploadImageToGitHub(file) {
     };
     reader.readAsDataURL(file);
   });
+}
+
+// Backward-compat wrapper for existing image upload call sites
+async function uploadImageToGitHub(file) {
+  return uploadMediaFileToGitHub(file, 'imageUploadProgress', 'Add image');
 }
 
 // ── Render the links chips UI ──────────────────────────────────────────────
@@ -746,6 +756,17 @@ function renderEditor() {
     ? `<img class="image-preview" src="https://raw.githubusercontent.com/${OWNER}/${REPO}/${BRANCH}/${p.image}" alt="passage image">`
     : '';
 
+  // Audio preview: the reader stores bare filename in @audio, so path is media/<filename>
+  const audioSrc = p.audio
+    ? 'https://raw.githubusercontent.com/' + OWNER + '/' + REPO + '/' + BRANCH + '/media/' + p.audio
+    : '';
+  const audioPreviewHtml = p.audio
+    ? `<audio class="audio-preview" controls src="${escAttr(audioSrc)}"></audio>`
+    : '';
+
+  // Detect MediaRecorder support
+  const canRecord = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
+
   panel.innerHTML = `
     <div class="field-row">
       <label>Passage Name</label>
@@ -809,6 +830,19 @@ function renderEditor() {
       <span class="image-filename" id="imageFilename">${p.image ? p.image : 'No image set'}</span>
       <span id="imageUploadProgress"></span>
     </div>
+    <div class="field-row audio-row" id="audioRow">
+      <label>Audio <span style="font-weight:normal;font-style:italic;text-transform:none;">(uploaded to media/, stored as @audio)</span></label>
+      ${audioPreviewHtml}
+      <div class="audio-upload-controls">
+        <input type="file" id="audioFileInput" accept="audio/*" style="font-size:11px;flex:1;">
+        <button class="btn primary" id="uploadAudioBtn">Upload</button>
+        ${canRecord ? '<button class="btn" id="recordBtn">⏺ Record</button>' : ''}
+        ${p.audio ? '<button class="btn danger" id="removeAudioBtn">Remove</button>' : ''}
+      </div>
+      <span class="audio-filename" id="audioFilename">${p.audio ? p.audio : 'No audio set'}</span>
+      <span id="audioUploadProgress" style="font-size:11px;color:#000080;display:none;"></span>
+      ${!canRecord ? '<span class="hint">Browser does not support audio recording; use file upload instead.</span>' : ''}
+    </div>
     <div class="field-row" id="linksRow">
       <label>Linked Passages <span style="font-weight:normal;font-style:italic;text-transform:none;">(appear in compass; serialised as [[Name]])</span></label>
       <div class="link-chips" id="linkChips"></div>
@@ -861,7 +895,6 @@ function renderEditor() {
         setStatus('Image uploaded to ' + mediaPath + '. Apply + Save to commit.');
         showNotice('Image uploaded: ' + mediaPath, 'success');
         document.getElementById('imageFilename').textContent = mediaPath;
-        // Show preview
         const existing = document.querySelector('.image-preview');
         if (existing) existing.remove();
         const img = document.createElement('img');
@@ -869,7 +902,6 @@ function renderEditor() {
         img.src = 'https://raw.githubusercontent.com/' + OWNER + '/' + REPO + '/' + BRANCH + '/' + mediaPath;
         img.alt = 'passage image';
         document.getElementById('imageRow').insertBefore(img, document.querySelector('.image-upload-controls'));
-        // Add remove button if not present
         if (!document.getElementById('removeImageBtn')) {
           const rmBtn = document.createElement('button');
           rmBtn.className = 'btn danger'; rmBtn.id = 'removeImageBtn'; rmBtn.textContent = 'Remove';
@@ -896,6 +928,118 @@ function renderEditor() {
   }
   const rmBtnEl = document.getElementById('removeImageBtn');
   if (rmBtnEl) rmBtnEl.addEventListener('click', removeImage);
+
+  // ── Audio upload handler ──────────────────────────────────────────────────
+  async function handleAudioUpload(file) {
+    const progress = document.getElementById('audioUploadProgress');
+    progress.style.display = 'block'; progress.textContent = 'Uploading…';
+    setStatus('Uploading audio "' + file.name + '"…');
+    try {
+      const mediaPath = await uploadMediaFileToGitHub(file, null, 'Add audio');
+      if (mediaPath) {
+        // Reader expects bare filename; strip the "media/" prefix
+        const bareName = mediaPath.replace(/^media\//, '');
+        passages[selectedIndex].audio = bareName;
+        updateRawPreview();
+        progress.style.display = 'none';
+        document.getElementById('audioFilename').textContent = bareName;
+        setStatus('Audio uploaded: ' + mediaPath + '. Apply + Save to commit.');
+        showNotice('Audio uploaded: ' + mediaPath, 'success');
+        // Show / refresh the audio preview element
+        const existingAudio = document.querySelector('.audio-preview');
+        if (existingAudio) existingAudio.remove();
+        const audioEl = document.createElement('audio');
+        audioEl.className = 'audio-preview'; audioEl.controls = true;
+        audioEl.src = 'https://raw.githubusercontent.com/' + OWNER + '/' + REPO + '/' + BRANCH + '/media/' + bareName;
+        document.getElementById('audioRow').insertBefore(audioEl, document.querySelector('.audio-upload-controls'));
+        if (!document.getElementById('removeAudioBtn')) {
+          const rmBtn = document.createElement('button');
+          rmBtn.className = 'btn danger'; rmBtn.id = 'removeAudioBtn'; rmBtn.textContent = 'Remove';
+          rmBtn.addEventListener('click', removeAudio);
+          document.querySelector('.audio-upload-controls').appendChild(rmBtn);
+        }
+      }
+    } catch (e) {
+      if (progress) { progress.style.display = 'none'; }
+      showNotice('Audio upload failed: ' + e.message, 'error');
+      setStatus('Audio upload failed.');
+    }
+  }
+
+  document.getElementById('uploadAudioBtn').addEventListener('click', async () => {
+    const fileInput = document.getElementById('audioFileInput');
+    if (!fileInput.files || !fileInput.files[0]) {
+      showNotice('Choose an audio file first.', 'error'); return;
+    }
+    await handleAudioUpload(fileInput.files[0]);
+  });
+
+  // ── Remove audio handler ──────────────────────────────────────────────────
+  function removeAudio() {
+    passages[selectedIndex].audio = null;
+    updateRawPreview();
+    document.getElementById('audioFilename').textContent = 'No audio set';
+    const preview = document.querySelector('.audio-preview');
+    if (preview) preview.remove();
+    const rmBtn = document.getElementById('removeAudioBtn');
+    if (rmBtn) rmBtn.remove();
+    // Stop any active recording
+    if (_mediaRecorder && _mediaRecorder.state !== 'inactive') _mediaRecorder.stop();
+    if (_recordStream) { _recordStream.getTracks().forEach(t => t.stop()); _recordStream = null; }
+    setStatus('Audio removed from passage. Apply + Save to commit.');
+  }
+  const rmAudioBtnEl = document.getElementById('removeAudioBtn');
+  if (rmAudioBtnEl) rmAudioBtnEl.addEventListener('click', removeAudio);
+
+  // ── In-browser recording ──────────────────────────────────────────────────
+  const recordBtnEl = document.getElementById('recordBtn');
+  if (recordBtnEl) {
+    recordBtnEl.addEventListener('click', async () => {
+      const progress = document.getElementById('audioUploadProgress');
+
+      // Stop recording if already going
+      if (_mediaRecorder && _mediaRecorder.state === 'recording') {
+        _mediaRecorder.stop();
+        return;
+      }
+
+      try {
+        _recordStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch (err) {
+        showNotice('Microphone access denied: ' + err.message, 'error'); return;
+      }
+
+      _recordChunks = [];
+      // Prefer audio/webm; fall back to whatever the browser supports
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm'
+        : MediaRecorder.isTypeSupported('audio/ogg') ? 'audio/ogg' : '';
+      _mediaRecorder = new MediaRecorder(_recordStream, mimeType ? { mimeType } : undefined);
+
+      _mediaRecorder.ondataavailable = e => { if (e.data.size > 0) _recordChunks.push(e.data); };
+
+      _mediaRecorder.onstop = async () => {
+        _recordStream.getTracks().forEach(t => t.stop()); _recordStream = null;
+        recordBtnEl.textContent = '⏺ Record';
+        recordBtnEl.classList.remove('recording');
+
+        const ext = mimeType.includes('ogg') ? 'ogg' : 'webm';
+        const blob = new Blob(_recordChunks, { type: mimeType || 'audio/webm' });
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        const safePName = (passages[selectedIndex]?.name || 'passage').replace(/[^a-zA-Z0-9_-]/g, '_');
+        const filename = 'recording_' + safePName + '_' + timestamp + '.' + ext;
+        const file = new File([blob], filename, { type: mimeType || 'audio/webm' });
+
+        if (progress) { progress.style.display = 'block'; progress.textContent = 'Encoding & uploading…'; }
+        await handleAudioUpload(file);
+      };
+
+      _mediaRecorder.start();
+      recordBtnEl.textContent = '⏹ Stop';
+      recordBtnEl.classList.add('recording');
+      if (progress) { progress.style.display = 'block'; progress.textContent = 'Recording…'; }
+      setStatus('Recording audio… click Stop when done.');
+    });
+  }
 
   // ── Inject Linked Passages select ────────────────────────────────────────
   const linksRow = document.getElementById('linksRow');
@@ -936,7 +1080,7 @@ function applyEdits() {
     if (!p.links.includes(l)) p.links.push(l);
   });
   p.body = rawBody.replace(/\[\[[^\]]+\]\]\s*/g, '').trim();
-  // image is already updated live on upload; preserve it
+  // image and audio are updated live by upload/record controls; preserve them
   if (p.tags.includes('geo')) {
     const latVal = parseFloat(document.getElementById('f_lat').value);
     const lngVal = parseFloat(document.getElementById('f_lng').value);
