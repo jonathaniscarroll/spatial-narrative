@@ -1482,7 +1482,6 @@ The body text is controlled by the nearest resolved geo passage. Links below con
 @geo 44.6488,-63.5752,50000
 @lede Halifax, Nova Scotia — enter the city radius to unlock nearby passages.
 @dwell 5000
-@dir 0-45:
 You are within range of Halifax. The story passages in this city are now active.
 
 [[FerryTerminal]]
@@ -1504,6 +1503,7 @@ You are within range of Halifax. The story passages in this city are now active.
 [[field notes marginal rd]]
 [[sometimes a spot for dancing]]
 [[samuel cunard]]
+[[Hilford resting place]]
 
 :: Sydney [geo]
 @geo 46.1368,-60.1942,50000
