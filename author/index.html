@@ -155,10 +155,10 @@
 <div class="notice-bar" id="noticeBar"></div>
 
 <div class="token-row">
-  <label for="ghToken">GitHub Token:</label>
-  <input type="password" id="ghToken" placeholder="ghp_..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
-  <button class="btn primary" id="loadBtn" title="Load story/main.twee from GitHub">Load</button>
-  <button class="btn primary" id="saveBtn" title="Save story/main.twee to GitHub">Save</button>
+  <label for="ghToken">Class Code:</label>
+  <input type="password" id="ghToken" placeholder="class code (needed to Save)" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+  <button class="btn primary" id="loadBtn" title="Load story/main.twee (no code needed)">Load</button>
+  <button class="btn primary" id="saveBtn" title="Publish story/main.twee (and any new media) as one commit">Save</button>
   <input type="text" id="commitMsgInput" placeholder="Commit message (optional)" autocorrect="off" autocapitalize="off" spellcheck="false" style="min-width:120px;flex:2;">
 </div>
 
@@ -238,6 +238,9 @@ const OWNER = 'jonathaniscarroll';
 const REPO = 'spatial-narrative';
 const FILE_PATH = 'story/main.twee';
 const BRANCH = 'main';
+// Cloudflare Worker that holds the GitHub token (see worker/README.md).
+// Replace YOUR-SUBDOMAIN with your workers.dev subdomain after `wrangler deploy`.
+const PUBLISH_URL = 'https://spatial-narrative-publish.YOUR-SUBDOMAIN.workers.dev';
 
 let passages = [];
 let selectedIndex = null;
@@ -247,6 +250,15 @@ let linkedNodeSet = new Set();
 let showAllPassages = false;
 let activePopup = null;
 let focusSelected = true;
+
+// Media staged locally until Save: repo path -> base64, and path -> local preview URL.
+let pendingMedia = {};
+let previewUrls = {};
+
+function mediaSrc(path) {
+  if (!path) return '';
+  return previewUrls[path] || ('https://raw.githubusercontent.com/' + OWNER + '/' + REPO + '/' + BRANCH + '/' + path);
+}
 
 // ── MediaRecorder state ───────────────────────────────────────────────────
 let _mediaRecorder = null;
@@ -641,7 +653,7 @@ function buildMarkers() {
     let color = COLOR_OUT;
     if (focus) {
       if (i === selectedIndex) color = '#ff0';
-      else if (focus.out.has(i) && focus.in_has(i)) color = COLOR_BOTH;
+      else if (focus.out.has(i) && focus.inn.has(i)) color = COLOR_BOTH;
       else if (focus.out.has(i)) color = COLOR_OUT;
       else if (focus.inn.has(i)) color = COLOR_IN;
       else return; // not linked to/from the selection: hide
@@ -750,53 +762,29 @@ document.addEventListener('keydown', e => {
   clearSelection();
 });
 
-// ── Generic media upload to GitHub ───────────────────────────────────────
-// Returns the repo-root path (e.g. "media/foo.mp3") on success, or null.
+// ── Media staging ────────────────────────────────────────────────────────
+// Files are NOT sent to GitHub immediately. They are held in memory and
+// published together with story/main.twee as ONE commit when Save is pressed.
+// Returns the repo-root path (e.g. "media/foo.mp3") on success.
 async function uploadMediaFileToGitHub(file, progressElId, labelOverride) {
-  const token = getToken();
-  if (!token) { showNotice('Enter a GitHub token before uploading.', 'error'); return null; }
-
   const progress = progressElId ? document.getElementById(progressElId) : null;
-  if (progress) { progress.style.display = 'block'; progress.textContent = 'Uploading…'; }
+  if (progress) { progress.style.display = 'block'; progress.textContent = 'Staging…'; }
 
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = async (ev) => {
+    reader.onerror = () => { if (progress) progress.style.display = 'none'; reject(new Error('Could not read file.')); };
+    reader.onload = (ev) => {
       try {
         const base64 = ev.target.result.split(',')[1];
         const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
         const mediaPath = 'media/' + safeName;
-        const commitMsg = (labelOverride || 'Add media') + ' ' + safeName + ' via authoring tool';
-
-        let existingSha = null;
-        try {
-          const check = await fetch(
-            `https://api.github.com/repos/${OWNER}/${REPO}/contents/${mediaPath}?ref=${BRANCH}`,
-            { headers: { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github.v3+json' } }
-          );
-          if (check.ok) { const existing = await check.json(); existingSha = existing.sha; }
-        } catch (_) {}
-
-        const body = { message: commitMsg, content: base64, branch: BRANCH };
-        if (existingSha) body.sha = existingSha;
-
-        const res = await fetch(
-          `https://api.github.com/repos/${OWNER}/${REPO}/contents/${mediaPath}`,
-          {
-            method: 'PUT',
-            headers: {
-              'Authorization': 'token ' + token,
-              'Accept': 'application/vnd.github.v3+json',
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(body)
-          }
-        );
-        if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'HTTP ' + res.status); }
-        if (progress) { progress.style.display = 'none'; }
+        pendingMedia[mediaPath] = base64;
+        if (previewUrls[mediaPath]) URL.revokeObjectURL(previewUrls[mediaPath]);
+        previewUrls[mediaPath] = URL.createObjectURL(file);
+        if (progress) progress.style.display = 'none';
         resolve(mediaPath);
       } catch (e) {
-        if (progress) { progress.style.display = 'none'; }
+        if (progress) progress.style.display = 'none';
         reject(e);
       }
     };
@@ -894,13 +882,11 @@ function renderEditor() {
   if (!Array.isArray(p.links)) p.links = [];
 
   const imagePreviewHtml = p.image
-    ? `<img class="image-preview" src="https://raw.githubusercontent.com/${OWNER}/${REPO}/${BRANCH}/${p.image}" alt="passage image">`
+    ? `<img class="image-preview" src="${escAttr(mediaSrc(p.image))}" alt="passage image">`
     : '';
 
   // Audio preview: the reader stores bare filename in @audio, so path is media/<filename>
-  const audioSrc = p.audio
-    ? 'https://raw.githubusercontent.com/' + OWNER + '/' + REPO + '/' + BRANCH + '/media/' + p.audio
-    : '';
+  const audioSrc = p.audio ? mediaSrc('media/' + p.audio) : '';
   const audioPreviewHtml = p.audio
     ? `<audio class="audio-preview" controls src="${escAttr(audioSrc)}"></audio>`
     : '';
@@ -961,22 +947,22 @@ function renderEditor() {
       <textarea id="f_body" rows="6">${escHtml(p.body ?? '')}</textarea>
     </div>
     <div class="field-row image-row" id="imageRow">
-      <label>Image <span style="font-weight:normal;font-style:italic;text-transform:none;">(uploaded to media/, stored as @image)</span></label>
+      <label>Image <span style="font-weight:normal;font-style:italic;text-transform:none;">(staged, published to media/ on Save)</span></label>
       ${imagePreviewHtml}
       <div class="image-upload-controls">
         <input type="file" id="imageFileInput" accept="image/*" style="font-size:11px;flex:1;">
-        <button class="btn primary" id="uploadImageBtn">Upload</button>
+        <button class="btn primary" id="uploadImageBtn">Add</button>
         ${p.image ? '<button class="btn danger" id="removeImageBtn">Remove</button>' : ''}
       </div>
       <span class="image-filename" id="imageFilename">${p.image ? p.image : 'No image set'}</span>
       <span id="imageUploadProgress"></span>
     </div>
     <div class="field-row audio-row" id="audioRow">
-      <label>Audio <span style="font-weight:normal;font-style:italic;text-transform:none;">(uploaded to media/, stored as @audio)</span></label>
+      <label>Audio <span style="font-weight:normal;font-style:italic;text-transform:none;">(staged, published to media/ on Save)</span></label>
       ${audioPreviewHtml}
       <div class="audio-upload-controls">
         <input type="file" id="audioFileInput" accept="audio/*" style="font-size:11px;flex:1;">
-        <button class="btn primary" id="uploadAudioBtn">Upload</button>
+        <button class="btn primary" id="uploadAudioBtn">Add</button>
         ${canRecord ? '<button class="btn" id="recordBtn">⏺ Record</button>' : ''}
         ${p.audio ? '<button class="btn danger" id="removeAudioBtn">Remove</button>' : ''}
       </div>
@@ -1020,27 +1006,27 @@ function renderEditor() {
     });
   }
 
-  // ── Image upload handler ──────────────────────────────────────────────────
+  // ── Image stage handler ───────────────────────────────────────────────────
   document.getElementById('uploadImageBtn').addEventListener('click', async () => {
     const fileInput = document.getElementById('imageFileInput');
     if (!fileInput.files || !fileInput.files[0]) {
       showNotice('Choose an image file first.', 'error'); return;
     }
     const file = fileInput.files[0];
-    setStatus('Uploading image "' + file.name + '"…');
+    setStatus('Staging image "' + file.name + '"…');
     try {
       const mediaPath = await uploadImageToGitHub(file);
       if (mediaPath) {
         passages[selectedIndex].image = mediaPath;
         updateRawPreview();
-        setStatus('Image uploaded to ' + mediaPath + '. Apply + Save to commit.');
-        showNotice('Image uploaded: ' + mediaPath, 'success');
+        setStatus('Image staged as ' + mediaPath + '. Save publishes it with the story.');
+        showNotice('Image staged: ' + mediaPath, 'success');
         document.getElementById('imageFilename').textContent = mediaPath;
         const existing = document.querySelector('.image-preview');
         if (existing) existing.remove();
         const img = document.createElement('img');
         img.className = 'image-preview';
-        img.src = 'https://raw.githubusercontent.com/' + OWNER + '/' + REPO + '/' + BRANCH + '/' + mediaPath;
+        img.src = mediaSrc(mediaPath);
         img.alt = 'passage image';
         document.getElementById('imageRow').insertBefore(img, document.querySelector('.image-upload-controls'));
         if (!document.getElementById('removeImageBtn')) {
@@ -1051,8 +1037,8 @@ function renderEditor() {
         }
       }
     } catch (e) {
-      showNotice('Image upload failed: ' + e.message, 'error');
-      setStatus('Image upload failed.');
+      showNotice('Image staging failed: ' + e.message, 'error');
+      setStatus('Image staging failed.');
     }
   });
 
@@ -1070,11 +1056,11 @@ function renderEditor() {
   const rmBtnEl = document.getElementById('removeImageBtn');
   if (rmBtnEl) rmBtnEl.addEventListener('click', removeImage);
 
-  // ── Audio upload handler ──────────────────────────────────────────────────
+  // ── Audio stage handler ───────────────────────────────────────────────────
   async function handleAudioUpload(file) {
     const progress = document.getElementById('audioUploadProgress');
-    progress.style.display = 'block'; progress.textContent = 'Uploading…';
-    setStatus('Uploading audio "' + file.name + '"…');
+    progress.style.display = 'block'; progress.textContent = 'Staging…';
+    setStatus('Staging audio "' + file.name + '"…');
     try {
       const mediaPath = await uploadMediaFileToGitHub(file, null, 'Add audio');
       if (mediaPath) {
@@ -1084,14 +1070,14 @@ function renderEditor() {
         updateRawPreview();
         progress.style.display = 'none';
         document.getElementById('audioFilename').textContent = bareName;
-        setStatus('Audio uploaded: ' + mediaPath + '. Apply + Save to commit.');
-        showNotice('Audio uploaded: ' + mediaPath, 'success');
+        setStatus('Audio staged as ' + mediaPath + '. Save publishes it with the story.');
+        showNotice('Audio staged: ' + mediaPath, 'success');
         // Show / refresh the audio preview element
         const existingAudio = document.querySelector('.audio-preview');
         if (existingAudio) existingAudio.remove();
         const audioEl = document.createElement('audio');
         audioEl.className = 'audio-preview'; audioEl.controls = true;
-        audioEl.src = 'https://raw.githubusercontent.com/' + OWNER + '/' + REPO + '/' + BRANCH + '/media/' + bareName;
+        audioEl.src = mediaSrc('media/' + bareName);
         document.getElementById('audioRow').insertBefore(audioEl, document.querySelector('.audio-upload-controls'));
         if (!document.getElementById('removeAudioBtn')) {
           const rmBtn = document.createElement('button');
@@ -1102,8 +1088,8 @@ function renderEditor() {
       }
     } catch (e) {
       if (progress) { progress.style.display = 'none'; }
-      showNotice('Audio upload failed: ' + e.message, 'error');
-      setStatus('Audio upload failed.');
+      showNotice('Audio staging failed: ' + e.message, 'error');
+      setStatus('Audio staging failed.');
     }
   }
 
@@ -1170,7 +1156,7 @@ function renderEditor() {
         const filename = 'recording_' + safePName + '_' + timestamp + '.' + ext;
         const file = new File([blob], filename, { type: mimeType || 'audio/webm' });
 
-        if (progress) { progress.style.display = 'block'; progress.textContent = 'Encoding & uploading…'; }
+        if (progress) { progress.style.display = 'block'; progress.textContent = 'Staging…'; }
         await handleAudioUpload(file);
       };
 
@@ -1279,25 +1265,28 @@ function deletePassage() {
   setStatus('Deleted "' + name + '".');
 }
 
-// ── GitHub load/save ────────────────────────────────────────────────────
-function decodeBase64Unicode(str) {
-  return decodeURIComponent(atob(str).split('').map(c =>
-    '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''));
+// ── Load / Save via the publish Worker ───────────────────────────────────
+function publishConfigured() {
+  if (PUBLISH_URL.indexOf('YOUR-SUBDOMAIN') !== -1) {
+    showNotice('PUBLISH_URL is not set. Deploy the Worker and edit author/index.html (see worker/README.md).', 'error');
+    return false;
+  }
+  return true;
 }
 
 async function loadFile() {
-  const token = getToken();
-  if (!token) { showNotice('Enter a GitHub Personal Access Token first.', 'error'); return; }
+  if (!publishConfigured()) return;
+  if (Object.keys(pendingMedia).length > 0 && !confirm('Loading discards your staged media and unsaved edits. Continue?')) return;
   setStatus('Loading story/main.twee...');
   try {
-    const res = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/contents/${FILE_PATH}?ref=${BRANCH}`, {
-      headers: { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github.v3+json' }
-    });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const data = await res.json();
+    const res = await fetch(PUBLISH_URL + '/file');
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'HTTP ' + res.status);
     fileSha = data.sha;
-    const decoded = decodeBase64Unicode(data.content.replace(/\n/g, ''));
-    passages = parseTwee(decoded);
+    pendingMedia = {};
+    Object.values(previewUrls).forEach(u => URL.revokeObjectURL(u));
+    previewUrls = {};
+    passages = parseTwee(data.content);
     selectedIndex = null;
     initLinkedSet();
     buildMarkers(); renderPassageList('');
@@ -1313,24 +1302,27 @@ async function loadFile() {
 }
 
 async function saveFile() {
-  const token = getToken();
-  if (!token) { showNotice('Enter a GitHub Personal Access Token first.', 'error'); return; }
+  if (!publishConfigured()) return;
+  const code = getToken();
+  if (!code) { showNotice('Enter the class code first.', 'error'); return; }
   if (!fileSha) { showNotice('Load the file first before saving.', 'error'); return; }
   const msg = document.getElementById('commitMsgInput').value.trim() || 'Update story/main.twee via authoring tool';
   const content = serializeAll();
-  const encoded = btoa(unescape(encodeURIComponent(content)));
-  setStatus('Saving...');
+  const files = [{ path: FILE_PATH, contentBase64: btoa(unescape(encodeURIComponent(content))) }];
+  Object.keys(pendingMedia).forEach(path => files.push({ path, contentBase64: pendingMedia[path] }));
+  setStatus('Saving ' + files.length + ' file' + (files.length === 1 ? '' : 's') + ' as one commit...');
   try {
-    const res = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/contents/${FILE_PATH}`, {
-      method: 'PUT',
-      headers: { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github.v3+json', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: msg, content: encoded, sha: fileSha, branch: BRANCH })
+    const res = await fetch(PUBLISH_URL + '/publish', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Class-Code': code },
+      body: JSON.stringify({ message: msg, files, baseSha: fileSha })
     });
-    if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'HTTP ' + res.status); }
-    const data = await res.json();
-    fileSha = data.content.sha;
-    showNotice('Saved. Commit: ' + data.commit.sha.slice(0,7), 'success');
-    setStatus('Saved to story/main.twee.');
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'HTTP ' + res.status);
+    fileSha = data.mainSha;
+    pendingMedia = {};
+    showNotice('Saved. Commit: ' + data.commit.slice(0,7), 'success');
+    setStatus('Saved story/main.twee' + (files.length > 1 ? ' + ' + (files.length - 1) + ' media file(s)' : '') + ' in one commit.');
   } catch(e) { showNotice('Save failed: ' + e.message, 'error'); setStatus('Save failed.'); }
 }
 

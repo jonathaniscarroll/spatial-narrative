@@ -1,0 +1,13 @@
+name = "spatial-narrative-publish"
+main = "index.js"
+compatibility_date = "2025-01-01"
+
+[vars]
+OWNER = "jonathaniscarroll"
+REPO = "spatial-narrative"
+BRANCH = "main"
+ALLOWED_ORIGIN = "https://jonathaniscarroll.github.io"
+
+# Secrets are NOT stored here. Set them with:
+#   npx wrangler secret put GITHUB_TOKEN
+#   npx wrangler secret put CLASS_CODE
