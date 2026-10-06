@@ -24,6 +24,10 @@
   body { display: flex; flex-direction: column; }
   .titlebar { background: linear-gradient(to right, #000080, #1084d0); color: white; padding: 3px 6px; font-weight: bold; font-size: 12px; display: flex; align-items: center; gap: 6px; flex-shrink: 0; user-select: none; }
   .toolbar { display: flex; align-items: center; gap: 4px; padding: 4px 6px; background: var(--panel); border-bottom: 1px solid var(--win-dark); flex-shrink: 0; flex-wrap: wrap; }
+  .toolbar .focus-toggle { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; margin-left: 6px; user-select: none; cursor: pointer; }
+  .toolbar .legend { font-size: 11px; color: #333; margin-left: 6px; user-select: none; }
+  .legend .lg-out { color: #000080; font-weight: bold; }
+  .legend .lg-in { color: #c05000; font-weight: bold; }
   .btn { background: var(--btn-face); border: none; box-shadow: var(--raised); padding: 3px 10px; cursor: pointer; font-size: 12px; min-height: 24px; }
   .btn:active { box-shadow: var(--inset); }
   .btn.primary { font-weight: bold; }
@@ -161,6 +165,11 @@
 <div class="toolbar">
   <button class="btn" id="newPassageBtn" title="Create a new passage (no map placement required)">New Passage</button>
   <button class="btn danger" id="deleteBtn" title="Delete selected passage">Delete</button>
+  <button class="btn" id="deselectBtn" title="Clear selection and show the whole link graph (Esc)">Deselect</button>
+  <label class="focus-toggle" title="When a passage is selected, hide every node not linked to or from it">
+    <input type="checkbox" id="focusToggle" checked> Focus selected
+  </label>
+  <span class="legend"><span class="lg-out">&rarr; links out</span> &nbsp; <span class="lg-in">&rarr; links in</span></span>
   <div class="new-passage-form" id="newPassageForm">
     <label for="npName">Passage Name</label>
     <input type="text" id="npName" placeholder="e.g. The Garden" autocorrect="off" autocapitalize="off" spellcheck="false">
@@ -237,6 +246,7 @@ let markers = {};
 let linkedNodeSet = new Set();
 let showAllPassages = false;
 let activePopup = null;
+let focusSelected = true;
 
 // ── MediaRecorder state ───────────────────────────────────────────────────
 let _mediaRecorder = null;
@@ -274,6 +284,10 @@ const map = L.map('map', { tap: true, tapTolerance: 15 }).setView([44.648, -63.5
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '© OpenStreetMap contributors'
 }).addTo(map);
+
+// Layer groups so radius circles and link edges can be cleared on every rebuild
+const circleLayer = L.layerGroup().addTo(map);
+const edgeLayer = L.layerGroup().addTo(map);
 
 map.on('click', function(e) {
   if (activePopup) { map.closePopup(activePopup); activePopup = null; }
@@ -537,21 +551,111 @@ function serializePassage(p) {
 
 function serializeAll() { return passages.map(serializePassage).join('\n'); }
 
+// ── Link graph helpers ───────────────────────────────────────────────────
+// Edges follow [[links]] only — the same relation the reader resolves via
+// getLinkedTargets(). @dir / @then variants are not graph edges.
+function isPlotted(p) {
+  return !!p && p.tags.includes('geo') && isFinite(p.lat) && isFinite(p.lng);
+}
+
+function getLinkEdges() {
+  const byName = new Map();
+  passages.forEach((p, i) => byName.set(p.name, i));
+  const edges = [];
+  const seen = new Set();
+  passages.forEach((p, from) => {
+    (p.links || []).forEach(name => {
+      const to = byName.get(name);
+      if (to === undefined || to === from) return;
+      const key = from + '>' + to;
+      if (seen.has(key)) return;
+      seen.add(key);
+      edges.push({ from, to });
+    });
+  });
+  return edges;
+}
+
+// Returns null when no focus is active; otherwise the sets of passage
+// indices linked FROM the selection (out) and linking TO it (inn).
+function getFocusInfo() {
+  if (!focusSelected || selectedIndex === null || !passages[selectedIndex]) return null;
+  const out = new Set(), inn = new Set();
+  getLinkEdges().forEach(e => {
+    if (e.from === selectedIndex) out.add(e.to);
+    if (e.to === selectedIndex) inn.add(e.from);
+  });
+  return { out, inn };
+}
+
+const COLOR_OUT = '#000080';
+const COLOR_IN = '#c05000';
+const COLOR_BOTH = '#6a1b9a';
+
+function drawEdges() {
+  edgeLayer.clearLayers();
+  const focus = getFocusInfo();
+  getLinkEdges().forEach(e => {
+    const a = passages[e.from], b = passages[e.to];
+    if (!isPlotted(a) || !isPlotted(b)) return;
+    if (focus && e.from !== selectedIndex && e.to !== selectedIndex) return;
+
+    const outgoing = focus ? e.from === selectedIndex : true;
+    const color = focus ? (outgoing ? COLOR_OUT : COLOR_IN) : COLOR_OUT;
+    const a_ll = [a.lat, a.lng], b_ll = [b.lat, b.lng];
+
+    const line = L.polyline([a_ll, b_ll], {
+      color, weight: focus ? 3 : 2, opacity: focus ? 0.9 : 0.5, interactive: true
+    }).addTo(edgeLayer);
+    line.bindTooltip(a.name + ' → ' + b.name, { sticky: true });
+
+    // Direction arrow 60% of the way along, so mutual links (A↔B) don't overlap.
+    const pa = map.project(L.latLng(a_ll), 0), pb = map.project(L.latLng(b_ll), 0);
+    const angle = Math.atan2(pb.y - pa.y, pb.x - pa.x) * 180 / Math.PI;
+    const at = [a.lat + (b.lat - a.lat) * 0.6, a.lng + (b.lng - a.lng) * 0.6];
+    const arrow = L.marker(at, {
+      interactive: false, keyboard: false, zIndexOffset: -100,
+      icon: L.divIcon({
+        className: '',
+        html: '<div style="transform:rotate(' + angle + 'deg);color:' + color +
+              ';font-size:14px;line-height:14px;width:14px;height:14px;text-align:center;">▶</div>',
+        iconSize: [14, 14], iconAnchor: [7, 7]
+      })
+    }).addTo(edgeLayer);
+  });
+}
+
 // ── Build map markers ────────────────────────────────────────────────────
-function clearMarkers() { Object.values(markers).forEach(m => map.removeLayer(m)); markers = {}; }
+function clearMarkers() {
+  Object.values(markers).forEach(m => map.removeLayer(m));
+  markers = {};
+  circleLayer.clearLayers();
+}
 
 function buildMarkers() {
   clearMarkers();
+  const focus = getFocusInfo();
   passages.forEach((p, i) => {
-    if (!p.tags.includes('geo') || !isFinite(p.lat) || !isFinite(p.lng)) return;
-    const isSelected = i === selectedIndex;
+    if (!isPlotted(p)) return;
+
+    let color = COLOR_OUT;
+    if (focus) {
+      if (i === selectedIndex) color = '#ff0';
+      else if (focus.out.has(i) && focus.in_has(i)) color = COLOR_BOTH;
+      else if (focus.out.has(i)) color = COLOR_OUT;
+      else if (focus.inn.has(i)) color = COLOR_IN;
+      else return; // not linked to/from the selection: hide
+    } else if (i === selectedIndex) {
+      color = '#ff0';
+    }
+
     const icon = L.divIcon({
       className: '',
-      html: `<div style="width:14px;height:14px;border-radius:50%;background:${isSelected ? '#ff0' : '#000080'};border:2px solid #fff;box-shadow:0 0 3px rgba(0,0,0,0.5);"></div>`,
+      html: `<div style="width:14px;height:14px;border-radius:50%;background:${color};border:2px solid #fff;box-shadow:0 0 3px rgba(0,0,0,0.5);"></div>`,
       iconSize: [14, 14], iconAnchor: [7, 7]
     });
     if (isFinite(p.radius) && p.radius > 0) {
-      L.circle([p.lat, p.lng], { radius: p.radius, color: '#000080', weight: 1, fillOpacity: 0.08 }).addTo(map);
+      L.circle([p.lat, p.lng], { radius: p.radius, color: '#000080', weight: 1, fillOpacity: 0.08 }).addTo(circleLayer);
     }
     const marker = L.marker([p.lat, p.lng], { icon, draggable: true }).addTo(map);
     marker.bindTooltip(p.name, { permanent: false, direction: 'top' });
@@ -559,16 +663,24 @@ function buildMarkers() {
       L.DomEvent.stopPropagation(e);
       selectPassage(i);
     });
+    marker.on('drag', e => {
+      // keep edges attached while dragging (live preview only)
+      const ll = e.target.getLatLng();
+      passages[i].lat = ll.lat; passages[i].lng = ll.lng;
+      drawEdges();
+    });
     marker.on('dragend', e => {
       const ll = e.target.getLatLng();
       passages[i].lat = parseFloat(ll.lat.toFixed(6));
       passages[i].lng = parseFloat(ll.lng.toFixed(6));
+      drawEdges();
       if (selectedIndex === i) renderEditor();
       updateRawPreview();
       setStatus('Moved ' + passages[i].name + ' to ' + passages[i].lat + ', ' + passages[i].lng);
     });
     markers[i] = marker;
   });
+  drawEdges();
 }
 
 function initLinkedSet() {
@@ -608,7 +720,35 @@ function selectPassage(i) {
   if (isMobile()) { setMobileView('editor'); } else { switchTab('editor'); }
   const p = passages[i];
   if (isFinite(p.lat) && isFinite(p.lng)) map.panTo([p.lat, p.lng]);
+  const focus = getFocusInfo();
+  if (focus) {
+    setStatus('"' + p.name + '": ' + focus.out.size + ' link' + (focus.out.size === 1 ? '' : 's') +
+      ' out (blue), ' + focus.inn.size + ' link' + (focus.inn.size === 1 ? '' : 's') +
+      ' in (orange). Deselect or press Esc to show all.');
+  }
 }
+
+function clearSelection() {
+  if (selectedIndex === null) return;
+  selectedIndex = null;
+  buildMarkers();
+  renderPassageList(document.getElementById('passageSearch').value);
+  document.getElementById('editorPanel').innerHTML = '<div class="notice">No passage selected.</div>';
+  document.getElementById('rawPreview').value = '';
+  setStatus('Selection cleared — showing all links.');
+}
+
+document.getElementById('deselectBtn').addEventListener('click', clearSelection);
+document.getElementById('focusToggle').addEventListener('change', e => {
+  focusSelected = e.target.checked;
+  buildMarkers();
+});
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  const tag = (document.activeElement && document.activeElement.tagName) || '';
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+  clearSelection();
+});
 
 // ── Generic media upload to GitHub ───────────────────────────────────────
 // Returns the repo-root path (e.g. "media/foo.mp3") on success, or null.
@@ -686,6 +826,7 @@ function renderLinkChips() {
         passages[selectedIndex].links.splice(rowIndex, 1);
         renderLinkChips();
         updateRawPreview();
+        buildMarkers();
       }
     });
     container.appendChild(chip);
@@ -1051,6 +1192,7 @@ function renderEditor() {
       p2.links.push(name);
       renderLinkChips();
       updateRawPreview();
+      buildMarkers();
       setStatus('Linked "' + name + '" to "' + p2.name + '". Apply + Save to commit.');
     }
     linkSel.value = '';
@@ -1156,6 +1298,7 @@ async function loadFile() {
     fileSha = data.sha;
     const decoded = decodeBase64Unicode(data.content.replace(/\n/g, ''));
     passages = parseTwee(decoded);
+    selectedIndex = null;
     initLinkedSet();
     buildMarkers(); renderPassageList('');
     setStatus('Loaded ' + passages.length + ' passages from story/main.twee.');
